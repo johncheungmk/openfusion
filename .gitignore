@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+
+# Local config/secrets
+.env
+*.local.yaml
+openfusion.yaml
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

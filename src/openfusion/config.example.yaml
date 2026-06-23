@@ -1,6 +1,12 @@
 # Copy this file to openfusion.yaml and adjust providers.
 # Any provider exposing /v1/chat/completions can be used: Ollama, LM Studio, vLLM,
 # llama.cpp server, Dify-compatible gateways, OpenRouter, OpenAI, Azure proxy, etc.
+#
+# Important:
+# - Runtime settings are read from openfusion.yaml.
+# - Create it with: openfusion init --path openfusion.yaml
+# - Then edit openfusion.yaml so provider model names match your installed models.
+# - For Ollama, run `ollama list` and use one of the listed model names.
 
 providers:
   - name: local-ollama
@@ -8,8 +14,10 @@ providers:
     enabled: true
     base_url: http://localhost:11434/v1
     api_key_env: OLLAMA_API_KEY
-    model: qwen2.5:7b-instruct
-    timeout_seconds: 120
+    # Pull this lightweight model with: ollama pull llama3.2:3b
+    # Or replace it with any exact model name shown by: ollama list
+    model: llama3.2:3b
+    timeout_seconds: 300
     weight: 1.0
 
   - name: local-lmstudio
@@ -49,9 +57,9 @@ fusion:
   # Start with one enabled local provider so the example works after Ollama is running.
   # Add local-lmstudio, cloud-openai, or cloud-openrouter here after enabling them above.
   judge_provider: local-ollama
-  max_parallel: 4
+  max_parallel: 1
   temperature: 0.2
-  max_tokens: 1200
+  max_tokens: 256
   require_at_least_successes: 1
   include_candidate_outputs: true
   # Candidate outputs are truncated before judge synthesis to keep prompts bounded.

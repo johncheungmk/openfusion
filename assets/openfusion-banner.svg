@@ -1,80 +1,66 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
   <title id="title">OpenFusion banner</title>
-  <desc id="desc">OpenFusion: open-source model fusion gateway for local and cloud LLMs</desc>
+  <desc id="desc">OpenFusion: open-source API-level model fusion gateway for local and cloud LLMs</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#07111f"/>
-      <stop offset="45%" stop-color="#102a43"/>
-      <stop offset="100%" stop-color="#1b0f35"/>
+      <stop offset="0%" stop-color="#050b18"/>
+      <stop offset="48%" stop-color="#0b1f3a"/>
+      <stop offset="100%" stop-color="#160d2e"/>
     </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="48%" r="55%">
-      <stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.62"/>
-      <stop offset="42%" stop-color="#38bdf8" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    <radialGradient id="centerGlow" cx="50%" cy="46%" r="55%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55"/>
+      <stop offset="36%" stop-color="#6366f1" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+    <linearGradient id="fusionLine" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#60a5fa"/>
       <stop offset="100%" stop-color="#a78bfa"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.35"/>
-    </filter>
-    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
+    <linearGradient id="fusionLine2" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-60%" width="180%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
+    <filter id="softShadow" x="-20%" y="-30%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
   </defs>
 
-  <rect width="1200" height="360" rx="34" fill="url(#bg)"/>
-  <rect width="1200" height="360" rx="34" fill="url(#glow)"/>
+  <rect width="1200" height="360" rx="32" fill="url(#bg)"/>
+  <rect width="1200" height="360" rx="32" fill="url(#centerGlow)"/>
 
-  <g opacity="0.18" stroke="#ffffff" stroke-width="1">
-    <path d="M80 300 C190 230 260 245 360 174 S550 90 690 150 920 230 1120 74" fill="none"/>
-    <path d="M40 96 C210 140 270 70 420 122 S670 240 820 174 980 86 1160 112" fill="none"/>
-    <path d="M100 230 C280 312 420 290 550 214 S742 78 920 150 1050 260 1160 232" fill="none"/>
+  <!-- Subtle network background -->
+  <g opacity="0.14" stroke="#60a5fa" stroke-width="1" fill="none">
+    <path d="M36 82 C168 132 250 70 378 120 S600 242 746 156 936 76 1164 126"/>
+    <path d="M72 286 C210 224 324 258 448 184 S672 88 810 150 968 252 1130 206"/>
+    <path d="M0 206 C150 178 260 220 390 190 S560 122 690 148 850 232 1002 190 1112 138 1200 150"/>
+  </g>
+  <g opacity="0.22" fill="#38bdf8">
+    <circle cx="84" cy="96" r="3"/><circle cx="198" cy="112" r="3"/><circle cx="358" cy="126" r="3"/>
+    <circle cx="842" cy="148" r="3"/><circle cx="982" cy="94" r="3"/><circle cx="1120" cy="130" r="3"/>
+    <circle cx="140" cy="278" r="3"/><circle cx="1012" cy="210" r="3"/><circle cx="1156" cy="206" r="3"/>
   </g>
 
-  <g transform="translate(92 70)" filter="url(#shadow)">
-    <rect width="336" height="220" rx="28" fill="#0b1627" fill-opacity="0.82" stroke="#23415f"/>
-    <text x="32" y="50" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700">model panel</text>
-    <g font-family="ui-monospace,Consolas,monospace" font-size="15" fill="#e2e8f0">
-      <rect x="32" y="78" width="248" height="38" rx="12" fill="#10243a" stroke="#28506f"/>
-      <text x="52" y="103">local / Ollama</text>
-      <circle cx="296" cy="97" r="7" fill="#22d3ee"/>
-      <rect x="32" y="126" width="248" height="38" rx="12" fill="#10243a" stroke="#28506f"/>
-      <text x="52" y="151">vLLM / LM Studio</text>
-      <circle cx="296" cy="145" r="7" fill="#38bdf8"/>
-      <rect x="32" y="174" width="248" height="38" rx="12" fill="#10243a" stroke="#28506f"/>
-      <text x="52" y="199">OpenAI-compatible</text>
-      <circle cx="296" cy="193" r="7" fill="#a78bfa"/>
-    </g>
+  <!-- Abstract fusion stream: no third-party logos -->
+  <g filter="url(#glow)" opacity="0.95">
+    <path d="M250 146 C385 72 465 238 600 180 C735 122 815 288 950 214" fill="none" stroke="url(#fusionLine)" stroke-width="9" stroke-linecap="round" opacity="0.96"/>
+    <path d="M250 214 C385 288 465 122 600 180 C735 238 815 72 950 146" fill="none" stroke="url(#fusionLine2)" stroke-width="9" stroke-linecap="round" opacity="0.96"/>
+    <path d="M270 180 C410 126 470 126 600 180 C730 234 790 234 930 180" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round" opacity="0.42"/>
+    <circle cx="600" cy="180" r="13" fill="#e0f2fe" opacity="0.95"/>
+    <circle cx="600" cy="180" r="36" fill="#38bdf8" opacity="0.13"/>
   </g>
 
-  <g transform="translate(489 84)" filter="url(#softGlow)">
-    <line x1="-40" y1="36" x2="118" y2="96" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
-    <line x1="-40" y1="110" x2="118" y2="96" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
-    <line x1="-40" y1="184" x2="118" y2="96" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="138" cy="96" r="58" fill="#0f2a44" stroke="#67e8f9" stroke-width="3"/>
-    <circle cx="138" cy="96" r="28" fill="#172554" stroke="#c4b5fd" stroke-width="3"/>
-    <path d="M126 96h24M138 84v24" stroke="#e0f2fe" stroke-width="5" stroke-linecap="round"/>
-    <line x1="196" y1="96" x2="304" y2="96" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
-    <path d="M304 96l-18-12v24z" fill="#a78bfa"/>
-  </g>
-
-  <g transform="translate(806 70)" filter="url(#shadow)">
-    <rect width="300" height="220" rx="28" fill="#0b1627" fill-opacity="0.82" stroke="#3b2d6b"/>
-    <text x="32" y="50" fill="#cbd5e1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700">judge synthesis</text>
-    <text x="32" y="94" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800">one final answer</text>
-    <text x="34" y="129" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17">fallback · routing · SSE</text>
-    <rect x="32" y="160" width="210" height="38" rx="14" fill="#1e1b4b" stroke="#8b5cf6"/>
-    <text x="54" y="185" fill="#ddd6fe" font-family="ui-monospace,Consolas,monospace" font-size="15">/v1/chat/completions</text>
-  </g>
-
-  <g transform="translate(92 306)">
-    <text x="0" y="0" fill="#ffffff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="46" font-weight="900">OpenFusion</text>
-    <text x="282" y="0" fill="#bae6fd" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="700">open-source API-level model fusion gateway</text>
+  <!-- Text block: separated from visual stream to avoid overlap -->
+  <g filter="url(#softShadow)">
+    <text x="600" y="282" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="62" font-weight="800" fill="#f8fafc" letter-spacing="-1.8">OpenFusion</text>
+    <text x="600" y="322" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="500" fill="#bfdbfe" letter-spacing="0.3">Open-source API-level model fusion gateway</text>
   </g>
 </svg>

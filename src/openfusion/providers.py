@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import time
 from abc import ABC, abstractmethod
+from typing import Any
 
 import httpx
 
@@ -23,11 +24,7 @@ class ModelProvider(ABC):
 
 
 class ProviderClientPool:
-    """Small shared AsyncClient pool keyed by timeout.
-
-    Providers can safely share clients when the timeout settings match because base URLs,
-    headers, and request bodies are still supplied per request.
-    """
+    """Shared AsyncClient pool keyed by provider timeout."""
 
     def __init__(self) -> None:
         self._clients: dict[float, httpx.AsyncClient] = {}
@@ -35,7 +32,8 @@ class ProviderClientPool:
     def get(self, timeout_seconds: float) -> httpx.AsyncClient:
         client = self._clients.get(timeout_seconds)
         if client is None:
-            client = httpx.AsyncClient(timeout=timeout_seconds)
+            limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
+            client = httpx.AsyncClient(timeout=timeout_seconds, limits=limits)
             self._clients[timeout_seconds] = client
         return client
 
@@ -57,7 +55,7 @@ class OpenAICompatibleProvider(ModelProvider):
         super().__init__(config)
         self._client = client
         self._client_pool = client_pool
-        self._owns_client = client is None
+        self._owns_client = client is None and client_pool is None
 
     async def aclose(self) -> None:
         if self._client is not None and self._owns_client:
@@ -79,9 +77,9 @@ class OpenAICompatibleProvider(ModelProvider):
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        body = {
+        body: dict[str, Any] = {
             "model": self.config.model,
-            "messages": [m.model_dump(exclude_none=True) for m in request.messages],
+            "messages": [message.model_dump(exclude_none=True) for message in request.messages],
             "temperature": request.temperature,
             "stream": False,
             **request.extra_body,
@@ -93,7 +91,11 @@ class OpenAICompatibleProvider(ModelProvider):
             response = await self._client_for_request().post(url, json=body, headers=headers)
             response.raise_for_status()
             data = response.json()
-            content = data["choices"][0]["message"].get("content", "")
+            choices = data.get("choices") or []
+            if not choices:
+                raise ValueError("Provider response did not contain choices")
+            message = choices[0].get("message") or {}
+            content = self._render_content(message.get("content"))
             usage_raw = data.get("usage") or {}
             usage = Usage(
                 prompt_tokens=int(usage_raw.get("prompt_tokens", 0) or 0),
@@ -103,29 +105,56 @@ class OpenAICompatibleProvider(ModelProvider):
             return CandidateResult(
                 provider=self.config.name,
                 model=self.config.model,
+                weight=self.config.weight,
                 content=content,
                 ok=True,
                 latency_ms=int((time.perf_counter() - started) * 1000),
                 usage=usage,
+                metadata={"finish_reason": choices[0].get("finish_reason")},
+            )
+        except httpx.TimeoutException:
+            return self._error_result(
+                started,
+                f"Provider timeout after {self.config.timeout_seconds:g}s",
             )
         except httpx.HTTPStatusError as exc:
-            return CandidateResult(
-                provider=self.config.name,
-                model=self.config.model,
-                content="",
-                ok=False,
-                error=self._http_status_error_message(exc, api_key),
-                latency_ms=int((time.perf_counter() - started) * 1000),
-            )
-        except Exception as exc:  # noqa: BLE001 - user needs provider error surfaced
-            return CandidateResult(
-                provider=self.config.name,
-                model=self.config.model,
-                content="",
-                ok=False,
-                error=str(exc),
-                latency_ms=int((time.perf_counter() - started) * 1000),
-            )
+            return self._error_result(started, self._http_status_error_message(exc, api_key))
+        except httpx.RequestError as exc:
+            detail = str(exc).strip() or "request failed"
+            return self._error_result(started, f"{exc.__class__.__name__}: {detail}")
+        except (KeyError, TypeError, ValueError) as exc:
+            detail = str(exc).strip() or "invalid response"
+            return self._error_result(started, f"Invalid provider response: {detail}")
+        except Exception as exc:  # noqa: BLE001 - provider failures must be surfaced
+            detail = str(exc).strip() or exc.__class__.__name__
+            return self._error_result(started, f"{exc.__class__.__name__}: {detail}")
+
+    def _error_result(self, started: float, error: str) -> CandidateResult:
+        return CandidateResult(
+            provider=self.config.name,
+            model=self.config.model,
+            weight=self.config.weight,
+            content="",
+            ok=False,
+            error=error,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+
+    @staticmethod
+    def _render_content(content: Any) -> str:
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+                elif isinstance(item, str):
+                    parts.append(item)
+            return "\n".join(parts)
+        return str(content)
 
     @staticmethod
     def _http_status_error_message(exc: httpx.HTTPStatusError, api_key: str | None) -> str:
@@ -148,9 +177,11 @@ class StaticProvider(ModelProvider):
         super().__init__(config)
         self.response = response
         self.last_request: ProviderRequest | None = None
+        self.requests: list[ProviderRequest] = []
 
     async def chat(self, request: ProviderRequest) -> CandidateResult:
         self.last_request = request
+        self.requests.append(request)
         return CandidateResult(
             provider=self.config.name,
             model=self.config.model,

@@ -1,37 +1,95 @@
-# OpenFusion architecture
+# OpenFusion v0.2 architecture
 
-OpenFusion is API-level model fusion. It does not merge neural-network weights. Instead, it runs multiple models through compatible chat-completion APIs and fuses their outputs.
+OpenFusion is an inference-time multi-model orchestration runtime. It does not merge model weights and it does not train a proprietary orchestration policy.
+
+## Request path
+
+```text
+OpenAI-compatible request
+          |
+          v
+ model/strategy resolver
+          |
+          v
+ constrained orchestration plan
+          |
+          +--> independent provider calls
+          +--> voting / selection
+          +--> critique and revision
+          +--> refinement layers
+          +--> synthesis
+          |
+          v
+ OpenAI-compatible response + public trace
+```
 
 ## Components
 
-1. **Providers**
-   - Any service exposing `POST /v1/chat/completions`.
-   - Examples: Ollama, LM Studio, vLLM, llama.cpp server, OpenAI, OpenRouter, Azure OpenAI behind a compatible proxy.
+### Provider adapter
 
-2. **Fusion engine**
-   - `panel_judge`: sends the same prompt to a panel of models in parallel. A judge model compares and synthesizes.
-   - `fallback`: tries models in order and returns the first successful answer.
-   - Provider `weight` values are advisory in the MVP and are included in the judge prompt as hints.
-   - Candidate answers are truncated before judge synthesis using `fusion.judge_candidate_max_chars`.
+`OpenAICompatibleProvider` sends non-streaming requests to `POST /chat/completions` under a configured `/v1` base URL. Provider credentials are read from environment variables. HTTP clients are pooled by timeout and closed during application shutdown.
 
-3. **OpenAI-compatible server**
-   - Provides `/v1/chat/completions` and `/v1/models`.
-   - Applications can point existing OpenAI SDK clients to OpenFusion.
-   - Model IDs of the form `provider/{name}/{model}` route directly to a single enabled provider.
+### Call budget
 
-4. **CLI**
-   - `openfusion chat` for quick experiments.
-   - `openfusion serve` for API serving.
+Every orchestrated request receives a `CallBudget`. Each provider call must reserve one unit before execution. When the budget is exhausted, the step is recorded as skipped rather than silently creating more cost.
 
-## Why API-level fusion first?
+The budget limits model calls, not tokens. Provider-level token, rate, and financial limits should still be enforced by the upstream gateway.
 
-Weight-level model merging is powerful but depends on model architecture compatibility, GPU memory, storage, licensing, and evaluation pipelines. API-level fusion is easier for an institution or developer to test because it can combine local and cloud models without retraining.
+### Independent generation
 
-## Future roadmap
+When a workflow requests more than one sample, OpenFusion inserts a neutral sampling instruction and calls providers independently. Agents do not see peer answers during the initial stage. This preserves diversity before aggregation.
 
-- Streaming responses.
-- Cost-aware routing.
-- Evaluation harness with golden answers.
-- RAG-aware fusion where different models use different retrievers.
-- Policy routing for private-data vs public-data prompts.
-- Optional integration with weight-merging tools such as mergekit for advanced users.
+### Aggregation methods
+
+- `parallel_synthesis` asks a synthesis model to create a new answer from independent candidates.
+- `best_of_n` asks an evaluator for a strict JSON winner and returns the selected candidate unchanged.
+- `majority_vote` and `weighted_vote` group normalized answers. They are intended for concise or regex-extractable answers, not long prose.
+- `critique_revision` separates the critic and reviser roles.
+- `layered_refinement` exposes one layer's outputs to the next layer before final synthesis.
+
+### Adaptive planning
+
+Adaptive mode has two planner options:
+
+1. **Heuristic planner** — local, deterministic, and free of model calls.
+2. **Model planner** — an optional provider returns a constrained JSON plan.
+
+A model plan can select only built-in strategies and enabled provider names. It cannot create Python code, arbitrary tools, endpoints, or recursive adaptive plans. Invalid plans fall back to heuristics. The plan is reduced automatically when its estimated calls exceed the remaining budget.
+
+### Public trace
+
+The response trace records stages, provider/model names, success status, latency, and bounded error messages. It does not request or expose hidden chain-of-thought. Candidate and workflow text can be suppressed independently.
+
+## Strategy call shapes
+
+```text
+fallback
+  provider A -> success, or provider B -> ...
+
+parallel_synthesis
+  draft A --\
+  draft B ----> synthesizer -> final
+  draft C --/
+
+best_of_n
+  candidate A --\
+  candidate B ----> evaluator -> return selected candidate
+  candidate C --/
+
+critique_revision
+  drafts -> critic -> reviser -> final
+
+layered_refinement
+  independent layer -> refinement layer(s) -> synthesizer -> final
+
+adaptive
+  heuristic/model planner -> one of the bounded workflows above
+```
+
+## Deliberate limitations
+
+- Fake streaming emits the completed result as SSE; provider tokens are not streamed through each workflow stage.
+- OpenFusion does not execute arbitrary model-requested tools in v0.2.
+- Voting uses normalized textual agreement, not semantic clustering.
+- The built-in evaluator is exact match and is not a general quality judge.
+- Adaptive heuristics are transparent rules, not learned reinforcement-learning orchestration.

@@ -1,50 +1,53 @@
-# Codex maintenance instructions for OpenFusion
+# Codex maintenance instructions for OpenFusion v0.2
 
-Use these instructions when working in this repository with Codex CLI.
+## Project identity
 
-## Project scope
+OpenFusion is an open-source, OpenAI-compatible multi-model orchestration and fusion runtime. It is not weight-level model merging, a general enterprise gateway replacement, or a claim to reproduce proprietary reinforcement-learning orchestration.
 
-OpenFusion is an API-level model-fusion gateway for OpenAI-compatible chat-completion
-providers. Do not rewrite the project from scratch. Keep changes focused on the existing
-package structure:
+Keep the existing package layout:
 
-- `src/openfusion/` for package code.
-- `tests/` for pytest coverage.
-- `docs/` for architecture and security notes.
-- `examples/` for runnable client examples.
-- `.github/workflows/ci.yml` for CI.
+- `src/openfusion/` — runtime code;
+- `tests/` — offline pytest coverage using fake providers;
+- `docs/` — architecture, research, migration, security, and evaluation;
+- `examples/` — clients and sample data;
+- `.github/workflows/ci.yml` — CI.
 
-OpenFusion is not a weight-level model-merging tool.
+## Required invariants
 
-## Development commands
+- Never add API keys, tokens, private endpoints, or `.env`.
+- Tests must not call external APIs.
+- Preserve OpenAI-compatible `/v1/chat/completions` and `/v1/models` shapes.
+- Preserve direct routes: `provider/{provider-name}/{configured-model}`.
+- Preserve the legacy `panel_judge` alias.
+- Every multi-call workflow must obey `max_total_calls`.
+- Do not expose hidden chain-of-thought; traces contain operational metadata only.
+- Model-generated plans must remain constrained to enabled providers and built-in strategies.
+
+## Development commands — Windows PowerShell
 
 ```powershell
 cd C:\Users\User\openfusion
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ruff check src tests
 pytest -q
 ```
 
-## Local run
+## Development commands — Linux/macOS
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item config.example.yaml openfusion.yaml
-openfusion providers --config openfusion.yaml
-openfusion chat "Explain model fusion in one paragraph" --config openfusion.yaml
-openfusion serve --config openfusion.yaml --port 8000
+```bash
+cd ~/openfusion
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+ruff check src tests
+pytest -q
 ```
 
-The example config starts with Ollama enabled. Enable additional providers only after
-setting their environment variables.
+## Before finishing a Codex task
 
-## Quality expectations
-
-- Do not add API keys, tokens, private endpoints, or secrets to the repository.
-- Keep provider API keys environment-based via `api_key_env`.
-- Tests must not call external model APIs.
-- Run `ruff check src tests` and `pytest -q` before finishing changes.
-- Preserve the OpenAI-compatible `/v1/chat/completions` response shape.
+1. Read the affected implementation and tests before editing.
+2. Make the smallest coherent change.
+3. Add or update offline tests.
+4. Run compilation, Ruff, and pytest.
+5. Review `git diff --check` and `git status --short`.
+6. Summarize behavior changes, compatibility risks, and exact commands run.

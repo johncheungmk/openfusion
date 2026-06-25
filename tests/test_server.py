@@ -21,12 +21,19 @@ def test_health_and_models() -> None:
 
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json() == {"ok": True, "providers": ["local"]}
+    health_payload = health.json()
+    assert health_payload["ok"] is True
+    assert health_payload["providers"] == ["local"]
+    assert health_payload["version"] == "0.2.0"
+    assert "adaptive" in health_payload["strategies"]
 
     models = client.get("/v1/models")
     assert models.status_code == 200
     model_ids = [item["id"] for item in models.json()["data"]]
     assert "openfusion/panel-judge" in model_ids
+    assert "openfusion/parallel-synthesis" in model_ids
+    assert "openfusion/critique-revision" in model_ids
+    assert "openfusion/adaptive" in model_ids
     assert "openfusion/fallback" in model_ids
     assert "provider/local/qwen" in model_ids
 
@@ -95,7 +102,7 @@ def test_chat_completions_with_static_providers() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["choices"][0]["message"]["content"] == "Final answer."
-    assert payload["openfusion"]["strategy"] == "panel_judge"
+    assert payload["openfusion"]["strategy"] == "parallel_synthesis"
 
 
 def test_direct_provider_model_routing() -> None:
@@ -201,3 +208,36 @@ def test_openai_compatible_request_extra_fields_are_forwarded() -> None:
     }
     assert provider.last_request.messages[0].name == "tester"
     assert provider.last_request.messages[0].tool_call_id == "call_123"
+
+
+def test_strategy_models_and_unknown_model_validation() -> None:
+    provider = StaticProvider(
+        ProviderConfig(name="local", base_url="http://local", model="qwen"),
+        "Answer.",
+    )
+    config = AppConfig(
+        providers=[ProviderConfig(name="local", base_url="http://local", model="qwen")],
+        fusion=FusionConfig(panel=["local"], judge_provider="local"),
+    )
+    client = TestClient(create_app(config, providers={"local": provider}))
+
+    vote = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openfusion/weighted-vote",
+            "messages": [{"role": "user", "content": "Answer: yes or no"}],
+            "fusion_samples_per_provider": 2,
+        },
+    )
+    assert vote.status_code == 200
+    assert vote.json()["openfusion"]["strategy"] == "weighted_vote"
+
+    unknown = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "some-vendor/model",
+            "messages": [{"role": "user", "content": "hello"}],
+        },
+    )
+    assert unknown.status_code == 400
+    assert "Unknown model ID" in unknown.json()["detail"]

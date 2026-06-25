@@ -23,3 +23,5 @@ jobs:
         run: ruff check src tests
       - name: Test
         run: pytest -q
+      - name: Build package
+        run: python -m build

@@ -1,26 +1,64 @@
-# OpenFusion
-
 <p align="center">
-  <img src="assets/openfusion-banner.svg" alt="OpenFusion banner: open-source API-level model fusion gateway" width="100%">
+  <img src="assets/openfusion-banner.svg" alt="OpenFusion — open-source multi-model orchestration and fusion runtime" width="100%">
 </p>
 
-OpenFusion is an open-source, OpenAI-compatible **model-fusion gateway** for local and cloud LLMs.
+# OpenFusion
 
-It lets you combine multiple models such as Ollama, LM Studio, vLLM, OpenAI, OpenRouter, or any OpenAI-compatible API. The first release focuses on **API-level fusion**: run several models in parallel, compare their answers, and synthesize a stronger final answer using a judge model.
+**OpenFusion v0.2** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows.
 
-> OpenFusion is not weight-level model merging. It is a practical gateway for multi-model deliberation, direct provider routing, fallback, and judge synthesis.
+It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique–revision, and execute bounded multi-layer refinement. Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
 
-## Features
+OpenFusion is **not** weight-level model merging, and v0.2 is **not** a trained reinforcement-learning orchestrator equivalent to Sakana Fugu. It is a readable, configurable foundation for experimenting with multi-model test-time computation.
 
-- OpenAI-compatible `/v1/chat/completions` API.
-- Works with local and cloud OpenAI-compatible APIs.
-- Direct provider routing using model IDs such as `provider/local-ollama/llama3.2:3b`.
-- `panel_judge` strategy: parallel model panel + judge synthesis.
-- `fallback` strategy: try providers in order until one succeeds.
-- CLI for local testing.
-- FastAPI server for integration with Dify, custom apps, agents, and SDK clients.
-- Dockerfile and docker-compose support.
-- GitHub Actions test workflow.
+## What v0.2 adds
+
+- Independent best-of-N sampling and selection.
+- Majority and provider-weighted consensus voting.
+- Generative parallel synthesis; legacy `panel_judge` remains an alias.
+- Critic → reviser workflows with distinct model roles.
+- Mixture-of-agents-style layered refinement.
+- Adaptive planning using transparent heuristics or an optional constrained model planner.
+- A hard per-request model-call budget.
+- Public workflow plans and execution traces without hidden chain-of-thought.
+- A JSONL exact-match evaluation command.
+- Clear timeout errors for slow local models.
+
+## Model gateway versus fusion runtime
+
+A gateway such as LiteLLM focuses on provider access, keys, routing, budgets, load balancing, and observability. OpenFusion focuses on what happens **after one request may involve several model calls**.
+
+A useful production arrangement is:
+
+```text
+Application / agent / RAG service
+              |
+              v
+         OpenFusion
+  deliberation and synthesis
+              |
+              v
+ LiteLLM or another AI gateway
+              |
+              v
+ local and cloud model providers
+```
+
+OpenFusion can also call providers directly without LiteLLM.
+
+## Strategies
+
+| Strategy | Behavior | Typical calls |
+|---|---|---:|
+| `fallback` | Try providers in order and return the first success. | 1 to panel size |
+| `parallel_synthesis` | Independent drafts, then a synthesizer writes a new answer. | drafts + 1 |
+| `best_of_n` | Generate alternatives and select one unchanged answer. | candidates + 1 |
+| `majority_vote` | Normalize concise answers and choose the largest exact consensus group. | candidates |
+| `weighted_vote` | As above, but sum provider weights. | candidates |
+| `critique_revision` | Independent drafts → critic feedback → new revised answer. | drafts + 2 |
+| `layered_refinement` | Independent layer → one or more refinement layers → synthesis. | multiple layers + 1 |
+| `adaptive` | Choose a bounded workflow using heuristics or an optional model planner. | depends on plan |
+
+Voting is most suitable for concise, multiple-choice, classification, or regex-extractable answers. Open-ended prose usually benefits more from synthesis or critique–revision.
 
 ## Quick start
 
@@ -29,10 +67,12 @@ It lets you combine multiple models such as Ollama, LM Studio, vLLM, OpenAI, Ope
 ```powershell
 git clone https://github.com/johncheungmk/openfusion.git
 cd openfusion
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
+
 Copy-Item .env.example .env
 openfusion init --path openfusion.yaml
 ```
@@ -42,67 +82,51 @@ openfusion init --path openfusion.yaml
 ```bash
 git clone https://github.com/johncheungmk/openfusion.git
 cd openfusion
-python -m venv .venv
+
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e '.[dev]'
+
 cp .env.example .env
 openfusion init --path openfusion.yaml
 ```
 
-OpenFusion uses `openfusion.yaml` as the runtime configuration file. The `openfusion init --path openfusion.yaml` command creates this file from the packaged example config.
+## The configuration file you must edit
 
-After creating `openfusion.yaml`, edit **that file** to match your local or cloud models. API keys belong in `.env` or your shell environment, not in `openfusion.yaml`.
-
-By default the server binds to `127.0.0.1`. If `OPENFUSION_API_KEY` is unset, OpenFusion logs a warning and accepts unauthenticated local requests. Set a strong `OPENFUSION_API_KEY` before binding to `0.0.0.0` or exposing the service.
-
-## Local-only Ollama setup
-
-The default local setup uses Ollama through its OpenAI-compatible endpoint:
-
-```text
-http://localhost:11434/v1
-```
-
-First, make sure Ollama is installed and running.
-
-Check installed models:
-
-### Windows PowerShell
-
-```powershell
-ollama list
-```
-
-### Linux / macOS Bash
-
-```bash
-ollama list
-```
-
-If you do not have a small model for testing, pull one:
-
-### Windows PowerShell
-
-```powershell
-ollama pull llama3.2:3b
-```
-
-### Linux / macOS Bash
-
-```bash
-ollama pull llama3.2:3b
-```
-
-Then edit:
+The command below creates the runtime configuration file:
 
 ```text
 openfusion.yaml
 ```
 
-Set the `local-ollama` provider's `model` field to exactly one of the model names shown by `ollama list`.
+```bash
+openfusion init --path openfusion.yaml
+```
 
-Example `openfusion.yaml` for local-only Ollama:
+After running it, edit **`openfusion.yaml` in the repository root**. Do not edit `.env.example`; `.env` contains secrets, while `openfusion.yaml` contains provider names, model names, roles, and workflow settings.
+
+### Local-only Ollama setup
+
+First inspect or install an Ollama model.
+
+PowerShell:
+
+```powershell
+ollama list
+ollama pull llama3.2:3b
+notepad .\openfusion.yaml
+```
+
+Linux / macOS:
+
+```bash
+ollama list
+ollama pull llama3.2:3b
+nano openfusion.yaml
+```
+
+Make the `model` value in `openfusion.yaml` exactly match `ollama list`:
 
 ```yaml
 providers:
@@ -110,52 +134,36 @@ providers:
     type: openai_compatible
     enabled: true
     base_url: http://localhost:11434/v1
-    api_key_env: OLLAMA_API_KEY
+    api_key_env:
     model: llama3.2:3b
     timeout_seconds: 300
     weight: 1.0
-
-  - name: local-lmstudio
-    type: openai_compatible
-    enabled: false
-    base_url: http://localhost:1234/v1
-    api_key_env: LMSTUDIO_API_KEY
-    model: local-model
-    timeout_seconds: 120
-    weight: 1.0
-
-  - name: cloud-openai
-    type: openai_compatible
-    enabled: false
-    base_url: https://api.openai.com/v1
-    api_key_env: OPENAI_API_KEY
-    model: gpt-4.1-mini
-    timeout_seconds: 90
-    weight: 1.0
-
-  - name: cloud-openrouter
-    type: openai_compatible
-    enabled: false
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    model: openai/gpt-4.1-mini
-    timeout_seconds: 90
-    weight: 1.0
-    headers:
-      HTTP-Referer: https://github.com/johncheungmk/openfusion
-      X-Title: OpenFusion
+    headers: {}
 
 fusion:
-  default_strategy: panel_judge
-  panel:
-    - local-ollama
+  default_strategy: parallel_synthesis
+  panel: [local-ollama]
   judge_provider: local-ollama
-  max_parallel: 1
+  critic_provider: local-ollama
+  reviser_provider: local-ollama
+  planner_provider:
+
+  max_parallel: 2
+  max_total_calls: 8
+  samples_per_provider: 1
+  refinement_rounds: 1
+
   temperature: 0.2
+  judge_temperature: 0.1
+  critique_temperature: 0.1
   max_tokens: 256
+
   require_at_least_successes: 1
   include_candidate_outputs: true
+  include_workflow_outputs: true
   judge_candidate_max_chars: 4000
+  transcript_max_chars: 12000
+  adaptive_use_model_planner: false
 
 server:
   host: 127.0.0.1
@@ -163,99 +171,82 @@ server:
   api_key_env: OPENFUSION_API_KEY
 ```
 
-Important: if `openfusion.yaml` says `model: qwen2.5:7b-instruct` but `ollama list` does not show `qwen2.5:7b-instruct`, OpenFusion will return a provider error such as `model not found`.
+For large CPU-only models, `timeout_seconds: 300` and `max_tokens: 128` or `256` are sensible starting points. A panel workflow can call the same model more than once, so it is naturally slower than direct routing.
 
-For local CPU models, use a smaller output limit at first:
+### Cloud plus local example
 
-```yaml
-fusion:
-  max_tokens: 128
+Put API keys in `.env`:
+
+```dotenv
+OPENAI_API_KEY=replace-me
+OPENFUSION_API_KEY=replace-with-a-long-random-token
 ```
 
-or:
-
-```yaml
-fusion:
-  max_tokens: 256
-```
-
-Large local models running on CPU can be slow. If a request times out, increase the provider timeout:
+Then enable the cloud provider in `openfusion.yaml`:
 
 ```yaml
 providers:
   - name: local-ollama
+    type: openai_compatible
+    enabled: true
+    base_url: http://localhost:11434/v1
+    api_key_env:
+    model: llama3.2:3b
     timeout_seconds: 300
+    weight: 1.0
+
+  - name: cloud-openai
+    type: openai_compatible
+    enabled: true
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    model: gpt-4.1-mini
+    timeout_seconds: 120
+    weight: 1.2
+
+fusion:
+  default_strategy: critique_revision
+  panel: [local-ollama, cloud-openai]
+  judge_provider: cloud-openai
+  critic_provider: cloud-openai
+  reviser_provider: cloud-openai
+  max_total_calls: 8
+  max_tokens: 512
 ```
 
-## Run OpenFusion
+## Validate and start
 
-Show configured providers:
-
-### Windows PowerShell
+PowerShell:
 
 ```powershell
-openfusion providers --config openfusion.yaml
+openfusion providers --config .\openfusion.yaml
+openfusion strategies
+pytest -q
+ruff check src tests
+openfusion serve --config .\openfusion.yaml --port 8000
 ```
 
-### Linux / macOS Bash
+Linux / macOS:
 
 ```bash
-openfusion providers --config openfusion.yaml
+openfusion providers --config ./openfusion.yaml
+openfusion strategies
+pytest -q
+ruff check src tests
+openfusion serve --config ./openfusion.yaml --port 8000
 ```
 
-Try the CLI:
-
-### Windows PowerShell
-
-```powershell
-openfusion chat "Explain model fusion in one paragraph" --config openfusion.yaml
-```
-
-### Linux / macOS Bash
-
-```bash
-openfusion chat "Explain model fusion in one paragraph" --config openfusion.yaml
-```
-
-Start the server:
-
-### Windows PowerShell
-
-```powershell
-openfusion serve --config openfusion.yaml --port 8000
-```
-
-### Linux / macOS Bash
-
-```bash
-openfusion serve --config openfusion.yaml --port 8000
-```
-
-Check health:
-
-### Windows PowerShell
-
-```powershell
-curl.exe http://localhost:8000/health
-```
-
-### Linux / macOS Bash
+Health check:
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Expected result:
+## Test direct provider routing first
 
-```json
-{"ok": true, "providers": ["local-ollama"]}
-```
+Direct routing proves that the underlying model works before you add multi-call orchestration.
 
-## Test the OpenAI-compatible API
-
-### Recommended Windows PowerShell test
-
-PowerShell quoting can break JSON when using `curl.exe -d`. The safest Windows test is `Invoke-RestMethod`:
+### Windows PowerShell
 
 ```powershell
 $headers = @{
@@ -268,30 +259,7 @@ $body = @{
   messages = @(
     @{
       role = "user"
-      content = "Give a short RAG deployment plan in 5 bullets."
-    }
-  )
-  max_tokens = 256
-} | ConvertTo-Json -Depth 10
-
-$response = Invoke-RestMethod `
-  -Uri "http://localhost:8000/v1/chat/completions" `
-  -Method Post `
-  -Headers $headers `
-  -Body $body
-
-$response.choices[0].message.content
-```
-
-To test panel-judge fusion:
-
-```powershell
-$body = @{
-  model = "openfusion/panel-judge"
-  messages = @(
-    @{
-      role = "user"
-      content = "Give a RAG deployment plan in exactly 3 short bullets."
+      content = "Give a RAG deployment plan in three short bullets."
     }
   )
   max_tokens = 128
@@ -306,122 +274,77 @@ $response = Invoke-RestMethod `
 $response.choices[0].message.content
 ```
 
-### Linux / macOS Bash test
-
-Direct provider route:
+### Linux / macOS
 
 ```bash
 curl http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer replace-with-a-long-random-token" \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer replace-with-a-long-random-token' \
   -d '{
     "model": "provider/local-ollama/llama3.2:3b",
     "messages": [
-      {
-        "role": "user",
-        "content": "Give a short RAG deployment plan in 5 bullets."
-      }
-    ],
-    "max_tokens": 256
-  }'
-```
-
-Panel-judge fusion:
-
-```bash
-curl http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer replace-with-a-long-random-token" \
-  -d '{
-    "model": "openfusion/panel-judge",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Give a RAG deployment plan in exactly 3 short bullets."
-      }
+      {"role": "user", "content": "Give a RAG deployment plan in three short bullets."}
     ],
     "max_tokens": 128
   }'
 ```
 
-## Example cloud + local config
+## Run orchestration strategies
 
-Edit `openfusion.yaml`, enable a cloud provider, and set the API key in `.env` or your shell environment.
+CLI:
 
-Example `.env`:
-
-```env
-OPENAI_API_KEY=sk-your-key-here
-OPENFUSION_API_KEY=replace-with-a-long-random-token
+```bash
+openfusion chat "Compare two RAG deployment designs." \
+  --config openfusion.yaml \
+  --strategy critique_revision \
+  --show-trace
 ```
 
-Example `openfusion.yaml`:
+OpenAI-compatible API:
 
-```yaml
-providers:
-  - name: local-ollama
-    type: openai_compatible
-    enabled: true
-    base_url: http://localhost:11434/v1
-    api_key_env: OLLAMA_API_KEY
-    model: llama3.2:3b
-    timeout_seconds: 300
-    weight: 1.0
-
-  - name: cloud-openai
-    type: openai_compatible
-    enabled: true
-    base_url: https://api.openai.com/v1
-    api_key_env: OPENAI_API_KEY
-    model: gpt-4.1-mini
-    timeout_seconds: 90
-    weight: 1.0
-
-fusion:
-  default_strategy: panel_judge
-  panel:
-    - local-ollama
-    - cloud-openai
-  judge_provider: cloud-openai
-  max_parallel: 2
-  temperature: 0.2
-  max_tokens: 512
-  require_at_least_successes: 1
-  include_candidate_outputs: true
-  judge_candidate_max_chars: 4000
-
-server:
-  host: 127.0.0.1
-  port: 8000
-  api_key_env: OPENFUSION_API_KEY
+```json
+{
+  "model": "openfusion/critique-revision",
+  "messages": [
+    {"role": "user", "content": "Compare two RAG deployment designs."}
+  ],
+  "max_tokens": 256,
+  "fusion_panel": ["local-ollama", "cloud-openai"],
+  "fusion_critic": "cloud-openai",
+  "fusion_reviser": "cloud-openai",
+  "fusion_max_total_calls": 8
+}
 ```
 
-## Strategies
-
-### `panel_judge`
-
-1. Send the prompt to multiple models in parallel.
-2. Collect candidate answers.
-3. Send candidates to a judge model.
-4. Return a final answer plus candidate metadata.
-
-Provider `weight` values are included in the judge prompt as advisory hints in the MVP; they do not yet control sampling or voting. Candidate answers are truncated to `fusion.judge_candidate_max_chars` characters before judge synthesis to keep prompts bounded.
-
-### `fallback`
-
-1. Try provider 1.
-2. If it fails, try provider 2.
-3. Continue until one succeeds.
-
-### Direct provider routing
-
-To bypass fusion and route to one configured provider, use a model ID from `/v1/models`, for example:
+Available model IDs include:
 
 ```text
-provider/local-ollama/llama3.2:3b
+openfusion/adaptive
+openfusion/parallel-synthesis
+openfusion/panel-judge            # legacy alias
+openfusion/critique-revision
+openfusion/layered-refinement
+openfusion/best-of-n
+openfusion/majority-vote
+openfusion/weighted-vote
+openfusion/fallback
+provider/{provider-name}/{configured-model}
 ```
 
-## Use with Python OpenAI SDK
+## Adaptive planning
+
+Adaptive mode is deliberately constrained. It can choose only enabled providers and built-in strategies, and every request has a hard call budget.
+
+By default it uses transparent heuristics and spends no planning model call:
+
+```bash
+openfusion plan "Review three RAG architectures and recommend one." \
+  --config openfusion.yaml
+```
+
+To use a model-generated JSON plan, configure `planner_provider`, set `adaptive_use_model_planner: true`, or pass `--model-planner`. This consumes one call before workflow execution. Invalid plans fall back to heuristics.
+
+## Python OpenAI SDK
 
 ```python
 from openai import OpenAI
@@ -432,62 +355,106 @@ client = OpenAI(
 )
 
 completion = client.chat.completions.create(
-    model="openfusion/panel-judge",
+    model="openfusion/layered-refinement",
     messages=[{"role": "user", "content": "Compare vLLM and Ollama."}],
-    extra_body={"fusion_strategy": "panel_judge"},
+    max_tokens=256,
+    extra_body={
+        "fusion_samples_per_provider": 1,
+        "fusion_refinement_rounds": 1,
+        "fusion_max_total_calls": 8,
+    },
 )
 print(completion.choices[0].message.content)
 ```
 
-To bypass fusion and route to one configured provider:
+## Evaluation
 
-```python
-completion = client.chat.completions.create(
-    model="provider/local-ollama/llama3.2:3b",
-    messages=[{"role": "user", "content": "Give a short RAG deployment plan."}],
-)
+Do not assume that more agents always improve a task. Measure quality, latency, and cost on a dataset representative of your use case.
+
+Example JSONL:
+
+```jsonl
+{"id":"math-1","prompt":"Return only the answer: 2 + 2","reference":"4"}
+{"id":"mcq-1","prompt":"Final answer only. A) red B) blue","reference":"B","answer_regex":"(?:Final answer|Answer):\\s*([A-D])"}
 ```
-
-## Troubleshooting
-
-### `model not found`
 
 Run:
 
 ```bash
-ollama list
+openfusion evaluate examples/eval_sample.jsonl \
+  --config openfusion.yaml \
+  --strategy weighted_vote \
+  --output evaluation-report.json
 ```
 
-Then edit `openfusion.yaml` so the provider `model` exactly matches one of the installed model names.
+The built-in evaluator is intentionally simple exact match. Add domain-specific graders before publishing performance claims.
 
-### Slow response or timeout with local Ollama
+## Response metadata
 
-Large models on CPU can be slow, especially with `panel_judge` because it may call a model once for candidate generation and once again for judge synthesis. Use a smaller model, lower `max_tokens`, or increase `timeout_seconds`.
+Every response includes an `openfusion` object containing:
 
-Recommended CPU test settings:
+- the executed strategy;
+- a bounded orchestration plan;
+- candidate status and optional candidate text;
+- a public execution trace with stages, providers, latency, and errors;
+- usage summed across model calls;
+- optional public critique or vote summary.
 
-```yaml
-fusion:
-  max_tokens: 128
+It does not request or expose hidden chain-of-thought.
 
-providers:
-  - name: local-ollama
-    timeout_seconds: 300
+## Security and cost notes
+
+- Keep secrets in `.env` or the process environment, never YAML.
+- Leave the default host at `127.0.0.1` for local use.
+- Set a strong `OPENFUSION_API_KEY` before binding to `0.0.0.0`.
+- Set `include_candidate_outputs: false` when intermediate model text is sensitive.
+- Set `include_workflow_outputs: false` to suppress critique and vote summaries.
+- Use `max_total_calls` to cap per-request model calls.
+- Model-generated planning cannot invent executable tools or arbitrary code paths.
+
+See [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/LITELLM.md](docs/LITELLM.md).
+
+## Research positioning
+
+OpenFusion v0.2 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, multi-agent debate, OpenRouter Fusion, and Sakana's orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging. See [docs/RESEARCH.md](docs/RESEARCH.md).
+
+## Migration from v0.1
+
+- `panel_judge` still works but is normalized to `parallel_synthesis` in metadata.
+- New config fields have defaults, so an existing valid v0.1 config should continue to load.
+- `/health` now includes version and strategy names.
+- More strategy model IDs appear in `/v1/models`.
+- Provider timeout errors are now explicit.
+
+See [docs/MIGRATION_V2.md](docs/MIGRATION_V2.md).
+
+## Development and Codex CLI
+
+The repository includes `AGENTS.md`, which Codex CLI discovers automatically when it starts from the repository root. `CODEX_INSTRUCTIONS.md` provides a longer maintenance checklist, and `docs/CODEX_V2_UPGRADE.md` contains the reproducible v0.1-to-v0.2 upgrade prompt.
+
+Interactive Codex session:
+
+```bash
+cd openfusion
+codex
 ```
 
-### Windows PowerShell JSON errors with curl
+One-shot review:
 
-If `curl.exe` returns JSON parsing errors, use the `Invoke-RestMethod` examples above or send JSON from a file with `--data-binary @body.json`.
+```bash
+codex "Review this OpenFusion v0.2 tree, run the required checks in AGENTS.md, and fix only verified issues."
+```
 
-## Roadmap
+Manual development checks:
 
-- Real token streaming from upstream providers.
-- Cost-aware routing.
-- Latency-aware routing.
-- RAG-aware model fusion.
-- Prompt classification for private vs public data routing.
-- Evaluation dashboard.
-- Optional integration with weight-level model-merging tools.
+```bash
+python -m pip install -e '.[dev]'
+python -m compileall -q src tests
+ruff check src tests
+pytest -q
+python -m build
+git diff --check
+```
 
 ## License
 

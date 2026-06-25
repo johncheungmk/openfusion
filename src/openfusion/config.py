@@ -28,6 +28,13 @@ class ProviderConfig(BaseModel):
     def trim_slash(cls, value: str) -> str:
         return value.rstrip("/")
 
+    @field_validator("timeout_seconds", "weight")
+    @classmethod
+    def require_positive_number(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("must be greater than zero")
+        return value
+
     def resolved_api_key(self) -> str | None:
         if self.api_key_env:
             return os.getenv(self.api_key_env)
@@ -37,15 +44,55 @@ class ProviderConfig(BaseModel):
 class FusionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    default_strategy: str = "panel_judge"
+    # Legacy panel_judge remains accepted. parallel_synthesis is the clearer v0.2 name.
+    default_strategy: str = "parallel_synthesis"
     panel: list[str] = Field(default_factory=list)
     judge_provider: str | None = None
+    critic_provider: str | None = None
+    reviser_provider: str | None = None
+    planner_provider: str | None = None
+
     max_parallel: int = 4
+    max_total_calls: int = 12
+    samples_per_provider: int = 1
+    refinement_rounds: int = 1
+
     temperature: float = 0.2
-    max_tokens: int | None = 1200
+    judge_temperature: float = 0.1
+    critique_temperature: float = 0.1
+    max_tokens: int | None = 256
+
     require_at_least_successes: int = 1
     include_candidate_outputs: bool = True
+    include_workflow_outputs: bool = True
     judge_candidate_max_chars: int = 4000
+    transcript_max_chars: int = 12000
+    vote_answer_regex: str | None = None
+
+    # When false, adaptive mode uses transparent local heuristics only. When true,
+    # planner_provider may produce a constrained JSON plan before execution.
+    adaptive_use_model_planner: bool = False
+
+    @field_validator(
+        "max_parallel",
+        "max_total_calls",
+        "samples_per_provider",
+        "require_at_least_successes",
+        "judge_candidate_max_chars",
+        "transcript_max_chars",
+    )
+    @classmethod
+    def require_positive_integer(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("must be at least 1")
+        return value
+
+    @field_validator("refinement_rounds")
+    @classmethod
+    def require_nonnegative_rounds(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("must be at least 0")
+        return value
 
 
 class ServerConfig(BaseModel):
@@ -80,15 +127,22 @@ class AppConfig(BaseModel):
         if missing_panel:
             raise ValueError(f"Fusion panel references unknown providers: {', '.join(missing_panel)}")
 
-        if self.fusion.judge_provider and self.fusion.judge_provider not in known_names:
-            raise ValueError(f"Judge provider is unknown: {self.fusion.judge_provider}")
+        role_references = {
+            "Judge": self.fusion.judge_provider,
+            "Critic": self.fusion.critic_provider,
+            "Reviser": self.fusion.reviser_provider,
+            "Planner": self.fusion.planner_provider,
+        }
+        for role, provider_name in role_references.items():
+            if provider_name and provider_name not in known_names:
+                raise ValueError(f"{role} provider is unknown: {provider_name}")
 
         return self
 
     def provider_map(self, enabled_only: bool = True) -> dict[str, ProviderConfig]:
         providers = self.providers
         if enabled_only:
-            providers = [p for p in providers if p.enabled]
+            providers = [provider for provider in providers if provider.enabled]
         return {provider.name: provider for provider in providers}
 
 
@@ -121,9 +175,16 @@ def write_example_config(path: str | Path) -> None:
                 "enabled": True,
                 "base_url": "http://localhost:11434/v1",
                 "api_key_env": "OLLAMA_API_KEY",
-                "model": "qwen2.5:7b-instruct",
+                "model": "llama3.2:3b",
+                "timeout_seconds": 300,
+                "weight": 1.0,
             }
         ],
-        "fusion": {"default_strategy": "panel_judge", "panel": ["local-ollama"]},
+        "fusion": {
+            "default_strategy": "parallel_synthesis",
+            "panel": ["local-ollama"],
+            "judge_provider": "local-ollama",
+            "max_tokens": 256,
+        },
     }
     destination.write_text(yaml.safe_dump(fallback, sort_keys=False), encoding="utf-8")

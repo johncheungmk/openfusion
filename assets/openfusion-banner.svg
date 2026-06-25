@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
   <title id="title">OpenFusion banner</title>
-  <desc id="desc">OpenFusion: open-source API-level model fusion gateway for local and cloud LLMs</desc>
+  <desc id="desc">OpenFusion: open-source multi-model orchestration and fusion runtime</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#050b18"/>
@@ -61,6 +61,6 @@
   <!-- Text block: separated from visual stream to avoid overlap -->
   <g filter="url(#softShadow)">
     <text x="600" y="282" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="62" font-weight="800" fill="#f8fafc" letter-spacing="-1.8">OpenFusion</text>
-    <text x="600" y="322" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="500" fill="#bfdbfe" letter-spacing="0.3">Open-source API-level model fusion gateway</text>
+    <text x="600" y="322" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22" font-weight="500" fill="#bfdbfe" letter-spacing="0.3">Open-source multi-model orchestration and fusion runtime</text>
   </g>
 </svg>

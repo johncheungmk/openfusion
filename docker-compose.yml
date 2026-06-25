@@ -7,3 +7,4 @@ services:
       - .env
     volumes:
       - ./openfusion.yaml:/app/openfusion.yaml:ro
+    restart: unless-stopped

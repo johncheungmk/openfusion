@@ -1,0 +1,2 @@
+{"id":"arithmetic-1","prompt":"Return only the final answer: 2 + 2","reference":"4","answer_regex":"(?:Final answer|Answer):?\\s*(.+)"}
+{"id":"arithmetic-2","prompt":"Return only the final answer: 9 - 3","reference":"6","answer_regex":"(?:Final answer|Answer):?\\s*(.+)"}

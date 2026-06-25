@@ -5,13 +5,13 @@ from openai import OpenAI
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="replace-with-a-long-random-token")
 
 completion = client.chat.completions.create(
-    model="openfusion/panel-judge",
+    model="openfusion/layered-refinement",
     messages=[{"role": "user", "content": "Compare vLLM and Ollama for a campus AI lab."}],
+    max_tokens=256,
     extra_body={
-        "fusion_strategy": "panel_judge",
-        # Optional: override the configured panel.
-        # "fusion_panel": ["local-ollama", "cloud-openai"],
-        # "fusion_judge": "cloud-openai",
+        "fusion_samples_per_provider": 1,
+        "fusion_refinement_rounds": 1,
+        "fusion_max_total_calls": 8,
     },
 )
 print(completion.choices[0].message.content)

@@ -148,7 +148,7 @@ async def test_judge_failure_gracefully_returns_best_candidate() -> None:
     )
 
     assert result.final == "This is the longer fallback answer."
-    assert result.judge_analysis == "Judge failed: judge failed"
+    assert result.judge_analysis == "Synthesis failed: judge failed"
 
 
 @pytest.mark.asyncio

@@ -41,3 +41,29 @@ async def test_http_status_error_includes_status_snippet_without_secrets(monkeyp
     assert "HTTP 401 from provider" in result.error
     assert "secret-token" not in result.error
     assert "Bearer [redacted]" in result.error
+
+
+@pytest.mark.asyncio
+async def test_timeout_has_clear_error_message() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("", request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = OpenAICompatibleProvider(
+        ProviderConfig(
+            name="provider",
+            base_url="https://example.test/v1",
+            model="model",
+            timeout_seconds=12,
+        ),
+        client=client,
+    )
+    try:
+        result = await provider.chat(
+            ProviderRequest(messages=[ChatMessage(role="user", content="hello")])
+        )
+    finally:
+        await client.aclose()
+
+    assert not result.ok
+    assert result.error == "Provider timeout after 12s"

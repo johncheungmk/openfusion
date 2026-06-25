@@ -107,6 +107,14 @@ class OpenAIChatCompletionRequest(BaseModel):
     user: str | None = None
     n: int | None = None
     response_format: dict[str, Any] | None = None
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: str | dict[str, Any] | None = None
+    parallel_tool_calls: bool | None = None
+    functions: list[dict[str, Any]] | None = None
+    function_call: str | dict[str, Any] | None = None
+    logit_bias: dict[str, Any] | None = None
+    logprobs: bool | None = None
+    top_logprobs: int | None = None
 
     # OpenFusion extensions. OpenAI SDK users can pass these through extra_body.
     fusion_strategy: str | None = None
@@ -136,6 +144,14 @@ class OpenAIChatCompletionRequest(BaseModel):
             "user",
             "n",
             "response_format",
+            "tools",
+            "tool_choice",
+            "parallel_tool_calls",
+            "functions",
+            "function_call",
+            "logit_bias",
+            "logprobs",
+            "top_logprobs",
         ):
             value = getattr(self, field_name)
             if value is not None:

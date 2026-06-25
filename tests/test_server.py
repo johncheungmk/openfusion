@@ -24,7 +24,7 @@ def test_health_and_models() -> None:
     health_payload = health.json()
     assert health_payload["ok"] is True
     assert health_payload["providers"] == ["local"]
-    assert health_payload["version"] == "0.2.0"
+    assert health_payload["version"] == "0.2.1"
     assert "adaptive" in health_payload["strategies"]
 
     models = client.get("/v1/models")
@@ -192,6 +192,23 @@ def test_openai_compatible_request_extra_fields_are_forwarded() -> None:
             "frequency_penalty": 0.2,
             "user": "user-123",
             "n": 1,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "lookup",
+                        "description": "Look up a value.",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+            "tool_choice": "auto",
+            "parallel_tool_calls": False,
+            "functions": [{"name": "legacy_lookup", "parameters": {"type": "object"}}],
+            "function_call": "auto",
+            "logit_bias": {"42": -1},
+            "logprobs": True,
+            "top_logprobs": 2,
         },
     )
 
@@ -205,6 +222,23 @@ def test_openai_compatible_request_extra_fields_are_forwarded() -> None:
         "frequency_penalty": 0.2,
         "user": "user-123",
         "n": 1,
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "description": "Look up a value.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "functions": [{"name": "legacy_lookup", "parameters": {"type": "object"}}],
+        "function_call": "auto",
+        "logit_bias": {"42": -1},
+        "logprobs": True,
+        "top_logprobs": 2,
     }
     assert provider.last_request.messages[0].name == "tester"
     assert provider.last_request.messages[0].tool_call_id == "call_123"

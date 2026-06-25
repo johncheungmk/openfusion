@@ -76,13 +76,14 @@ class OpenAICompatibleProvider(ModelProvider):
         api_key = self.config.resolved_api_key()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+        secret_values = [value for value in [api_key, *headers.values()] if value]
 
         body: dict[str, Any] = {
+            **request.extra_body,
             "model": self.config.model,
             "messages": [message.model_dump(exclude_none=True) for message in request.messages],
             "temperature": request.temperature,
             "stream": False,
-            **request.extra_body,
         }
         if request.max_tokens is not None:
             body["max_tokens"] = request.max_tokens
@@ -118,15 +119,15 @@ class OpenAICompatibleProvider(ModelProvider):
                 f"Provider timeout after {self.config.timeout_seconds:g}s",
             )
         except httpx.HTTPStatusError as exc:
-            return self._error_result(started, self._http_status_error_message(exc, api_key))
+            return self._error_result(started, self._http_status_error_message(exc, secret_values))
         except httpx.RequestError as exc:
-            detail = str(exc).strip() or "request failed"
+            detail = self._redact_text(str(exc).strip() or "request failed", secret_values)
             return self._error_result(started, f"{exc.__class__.__name__}: {detail}")
         except (KeyError, TypeError, ValueError) as exc:
-            detail = str(exc).strip() or "invalid response"
+            detail = self._redact_text(str(exc).strip() or "invalid response", secret_values)
             return self._error_result(started, f"Invalid provider response: {detail}")
         except Exception as exc:  # noqa: BLE001 - provider failures must be surfaced
-            detail = str(exc).strip() or exc.__class__.__name__
+            detail = self._redact_text(str(exc).strip() or exc.__class__.__name__, secret_values)
             return self._error_result(started, f"{exc.__class__.__name__}: {detail}")
 
     def _error_result(self, started: float, error: str) -> CandidateResult:
@@ -157,11 +158,19 @@ class OpenAICompatibleProvider(ModelProvider):
         return str(content)
 
     @staticmethod
-    def _http_status_error_message(exc: httpx.HTTPStatusError, api_key: str | None) -> str:
+    def _redact_text(text: str, secret_values: list[str]) -> str:
+        redacted = re.sub(r"Bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [redacted]", text)
+        for secret in secret_values:
+            if len(secret) >= 4:
+                redacted = redacted.replace(secret, "[redacted]")
+        return redacted
+
+    @staticmethod
+    def _http_status_error_message(
+        exc: httpx.HTTPStatusError, secret_values: list[str]
+    ) -> str:
         snippet = exc.response.text.replace("\n", " ").strip()
-        snippet = re.sub(r"Bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [redacted]", snippet)
-        if api_key:
-            snippet = snippet.replace(api_key, "[redacted]")
+        snippet = OpenAICompatibleProvider._redact_text(snippet, secret_values)
         if len(snippet) > 300:
             snippet = f"{snippet[:300]}..."
         status_code = exc.response.status_code

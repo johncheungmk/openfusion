@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Redacted configured header secret values from provider errors.
+- Prevented `extra_body` from overriding fixed provider fields such as `model`, `messages`, `temperature`, and `stream`.
+- Forwarded common OpenAI Chat Completions tool and log probability fields.
+
 ## 0.2.0
 
 - Added best-of-N selection, majority vote, weighted vote, critique–revision, layered refinement, and adaptive planning.

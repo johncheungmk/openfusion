@@ -8,7 +8,25 @@
 
 It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique–revision, and execute bounded multi-layer refinement. Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
 
-OpenFusion is **not** weight-level model merging, and v0.4 is **not** a trained reinforcement-learning orchestrator equivalent to Sakana Fugu. It is a readable, configurable foundation for experimenting with multi-model test-time computation.
+OpenFusion is **not** the original Together AI Mixture-of-Agents implementation, not
+weight-level model merging, and not a trained Sakana Fugu-style learned
+orchestrator. It is also not a replacement for LiteLLM. It is a transparent,
+self-hostable, local-model-friendly runtime for OpenRouter-Fusion-like and
+MoA-inspired experiments where the workflow is explicit, bounded, and inspectable.
+
+Do not claim benchmark gains from OpenFusion, MoA, Self-MoA, voting, ranking, or
+cascading strategies without task-specific evaluation. More agents and more calls
+can improve, match, or degrade results depending on model quality, task type,
+prompts, and budget.
+
+## Positioning
+
+| System | Open-source implementation | Self-hostable | Local model support | OpenAI-compatible gateway | Learned orchestrator | Configurable workflow strategies | Transparent traces | Built-in evaluation | Provider/key management focus | Intended role |
+|---|---|---|---|---|---|---|---|---|---|---|
+| OpenFusion | Yes | Yes | Yes | Yes | No | Yes | Yes | Yes | Basic | Transparent orchestration runtime for local/cloud fusion experiments |
+| OpenRouter Fusion | No, managed feature | No | No direct local hosting | Via OpenRouter API | No public learned orchestrator claim | Limited by managed service | Structured analysis surfaced by service | No local built-in evaluator | Managed provider marketplace | Hosted multi-model deliberation product |
+| Sakana Fugu | No public implementation | No | No direct local hosting | Product/model endpoint | Yes, positioned as learned orchestration | Not user-configurable as local workflows | Not a local trace runtime | No local built-in evaluator | Not gateway focused | Learned model orchestration system |
+| LiteLLM | Yes | Yes | Yes, through configured providers | Yes | No | Routing/gateway policies, not MoA workflows | Gateway logs/observability | No MoA evaluation harness | Strong | Provider gateway, key management, budgets, routing, observability |
 
 ## What v0.4 adds
 
@@ -505,6 +523,23 @@ openfusion evaluate examples/eval_moa_sample.jsonl \
 Reports include accuracy, win/tie/loss rates versus the fallback baseline, call
 counts, latency percentiles, token totals, cost placeholder, accuracy per call,
 accuracy per 1k tokens, and strategy failures.
+
+### Recommended baselines for papers
+
+For any paper, blog post, or benchmark claim, compare against:
+
+- single best model;
+- direct provider route or `fallback`;
+- `best_of_n`;
+- `self_moa`;
+- mixed MoA / `layered_refinement`;
+- `pairwise_rank_fuse`;
+- `semantic_vote` for short-answer tasks;
+- `uncertainty_cascade` for cost-sensitive tasks.
+
+Use equal `max_total_calls` budgets where possible, and report latency, token use,
+call counts, and failures alongside quality. Do not claim benchmark gains without
+evaluation on representative data.
 
 The default grader is exact match. Optional `--grader llm_pairwise` and
 `--grader llm_rubric --grader-provider PROVIDER` are useful for qualitative

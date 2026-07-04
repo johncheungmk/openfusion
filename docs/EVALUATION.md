@@ -1,6 +1,11 @@
 # Evaluation guide
 
-OpenFusion does not assume that more calls produce a better answer. Evaluate each strategy on representative tasks.
+OpenFusion does not assume that more calls produce a better answer. Evaluate each
+strategy on representative tasks.
+
+Do not claim benchmark gains without evaluation. Report the dataset, grader,
+strategy settings, call budget, token use, latency, failures, and whether web or
+retrieval tools were available.
 
 ## Dataset format
 
@@ -104,6 +109,22 @@ Compare at least:
 - wall-clock latency;
 - financial cost;
 - failure rate.
+
+## Recommended baselines for papers
+
+For papers, benchmark posts, and release claims, include:
+
+- single best model;
+- direct provider route or `fallback`;
+- `best_of_n`;
+- `self_moa`;
+- mixed MoA / `layered_refinement`;
+- `pairwise_rank_fuse`;
+- `semantic_vote` for short-answer tasks;
+- `uncertainty_cascade` for cost-sensitive tasks.
+
+Prefer equal `max_total_calls` comparisons when possible. When budgets differ,
+state the exact call budget and token budget for every strategy.
 
 The built-in score is normalized exact match. Use a domain-specific test executor, citation checker, retrieval-grounding grader, or blinded human evaluation for open-ended tasks.
 

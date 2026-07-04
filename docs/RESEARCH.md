@@ -1,6 +1,22 @@
 # Research positioning
 
-OpenFusion is an engineering implementation inspired by several inference-time scaling directions. The links below are references, not claims that OpenFusion reproduces every reported result.
+OpenFusion is an engineering implementation inspired by several inference-time
+scaling directions. The links below are references, not claims that OpenFusion
+reproduces every reported result.
+
+OpenFusion is a transparent, self-hostable, local-model-friendly runtime for
+OpenRouter-Fusion-like and MoA-inspired experiments. It is not the original
+Together AI MoA implementation, not a trained Sakana Fugu-style orchestrator, not
+a replacement for LiteLLM, and not a claim that more agents always improve results.
+
+## Comparison
+
+| System | Open-source implementation | Self-hostable | Local model support | OpenAI-compatible gateway | Learned orchestrator | Configurable workflow strategies | Transparent traces | Built-in evaluation | Provider/key management focus | Intended role |
+|---|---|---|---|---|---|---|---|---|---|---|
+| OpenFusion | Yes | Yes | Yes | Yes | No | Yes | Yes | Yes | Basic | Transparent orchestration runtime for local/cloud fusion experiments |
+| OpenRouter Fusion | No, managed feature | No | No direct local hosting | Via OpenRouter API | No public learned orchestrator claim | Limited by managed service | Structured analysis surfaced by service | No local built-in evaluator | Managed provider marketplace | Hosted multi-model deliberation product |
+| Sakana Fugu | No public implementation | No | No direct local hosting | Product/model endpoint | Yes, positioned as learned orchestration | Not user-configurable as local workflows | Not a local trace runtime | No local built-in evaluator | Not gateway focused | Learned model orchestration system |
+| LiteLLM | Yes | Yes | Yes, through configured providers | Yes | No | Routing/gateway policies, not MoA workflows | Gateway logs/observability | No MoA evaluation harness | Strong | Provider gateway, key management, budgets, routing, observability |
 
 ## Parallel synthesis
 
@@ -77,3 +93,18 @@ Sakana's evolutionary model merging combines model parameters or layers offline.
 ## Evaluation principle
 
 Multi-agent methods spend additional inference compute and do not improve every task. Compare accuracy, latency, token use, and financial cost at equal or explicitly reported budgets. OpenFusion includes a small exact-match harness to encourage reproducible local comparisons, but serious benchmarks require domain-specific graders.
+
+Do not claim benchmark gains without evaluation on representative data. Recommended
+baselines for papers and benchmark reports:
+
+- single best model;
+- direct provider route or `fallback`;
+- `best_of_n`;
+- `self_moa`;
+- mixed MoA / `layered_refinement`;
+- `pairwise_rank_fuse`;
+- `semantic_vote` for short-answer tasks;
+- `uncertainty_cascade` for cost-sensitive tasks.
+
+Report equal-budget comparisons where possible, including `max_total_calls`, total
+tokens, latency, failures, and the grader used.

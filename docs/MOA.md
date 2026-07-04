@@ -1,8 +1,13 @@
 # MoA and Self-MoA
 
 OpenFusion supports several inference-time workflows inspired by mixture-of-agents
-patterns. These are API-level orchestration strategies, not weight-level model merging
-or claims to reproduce proprietary orchestrators.
+patterns. These are API-level orchestration strategies, not weight-level model
+merging, not the original Together AI MoA implementation, and not claims to
+reproduce proprietary or learned orchestrators such as Sakana Fugu.
+
+The goal is transparent, self-hostable experimentation with local and cloud models.
+Do not assume that more agents improve quality. Evaluate each workflow against
+strong single-model and lower-cost baselines before making performance claims.
 
 ## Strategies
 
@@ -127,3 +132,17 @@ openfusion evaluate examples/eval_moa_sample.jsonl \
 
 Optional LLM graders can help inspect open-ended outputs, but they are not ground
 truth and should not replace deterministic or human evaluation for published claims.
+
+Recommended baselines for papers:
+
+- single best model;
+- direct provider route or `fallback`;
+- `best_of_n`;
+- `self_moa`;
+- mixed MoA / `layered_refinement`;
+- `pairwise_rank_fuse`;
+- `semantic_vote` for short-answer tasks;
+- `uncertainty_cascade` for cost-sensitive tasks.
+
+Do not claim benchmark gains without evaluation that reports budget, calls, tokens,
+latency, failures, and the grader.

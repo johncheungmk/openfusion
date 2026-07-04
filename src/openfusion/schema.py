@@ -57,6 +57,7 @@ class WorkflowStep(BaseModel):
     stage: str
     provider: str | None = None
     model: str | None = None
+    role_name: str | None = None
     status: Literal["ok", "error", "skipped", "fallback"] = "ok"
     latency_ms: int | None = None
     note: str | None = None
@@ -130,6 +131,7 @@ class OpenAIChatCompletionRequest(BaseModel):
     fusion_self_moa_provider: str | None = None
     fusion_self_moa_samples: int | None = None
     fusion_self_moa_mode: Literal["select", "synthesize"] | None = None
+    fusion_structured_synthesis: bool | None = None
 
     def effective_max_tokens(self) -> int | None:
         if self.max_completion_tokens is not None:

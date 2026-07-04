@@ -307,3 +307,42 @@ def test_self_moa_model_ids_route_chat_completions() -> None:
         payload = response.json()
         assert payload["choices"][0]["message"]["content"] == "Answer."
         assert payload["openfusion"]["strategy"] == strategy
+
+
+def test_chat_completions_structured_synthesis_override() -> None:
+    structured = (
+        '{"consensus_points":["same"],"contradictions":[],"unique_insights":[],'
+        '"missing_information":[],"final_answer":"Structured final."}'
+    )
+    providers = {
+        "local": StaticProvider(
+            ProviderConfig(name="local", base_url="http://local", model="qwen"),
+            "Draft.",
+        ),
+        "judge": StaticProvider(
+            ProviderConfig(name="judge", base_url="http://judge", model="judge"),
+            structured,
+        ),
+    }
+    config = AppConfig(
+        providers=[
+            ProviderConfig(name="local", base_url="http://local", model="qwen"),
+            ProviderConfig(name="judge", base_url="http://judge", model="judge"),
+        ],
+        fusion=FusionConfig(panel=["local"], judge_provider="judge", structured_synthesis=False),
+    )
+    client = TestClient(create_app(config, providers=providers))
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openfusion/parallel-synthesis",
+            "messages": [{"role": "user", "content": "hello"}],
+            "fusion_structured_synthesis": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["choices"][0]["message"]["content"] == "Structured final."
+    assert payload["openfusion"]["workflow_outputs"]["consensus_points"] == "same"

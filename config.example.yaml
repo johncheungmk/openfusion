@@ -50,6 +50,13 @@ fusion:
   # layered_refinement, adaptive.
   default_strategy: parallel_synthesis
   panel: [local-ollama]
+  panel_roles:
+    - name: factual_checker
+      instruction: Focus on factual accuracy and cite uncertainty.
+    - name: edge_case_reviewer
+      instruction: Focus on edge cases, failure modes, and missing assumptions.
+    - name: concise_summarizer
+      instruction: Produce the clearest concise answer.
 
   # These roles may use the same model or different specialist models.
   judge_provider: local-ollama
@@ -76,6 +83,7 @@ fusion:
   require_at_least_successes: 1
   include_candidate_outputs: true
   include_workflow_outputs: true
+  structured_synthesis: false
   judge_candidate_max_chars: 4000
   transcript_max_chars: 12000
   vote_answer_regex:

@@ -19,6 +19,12 @@ or claims to reproduce proprietary orchestrators.
 
 ```yaml
 fusion:
+  panel_roles:
+    - name: factual_checker
+      instruction: Focus on factual accuracy and cite uncertainty.
+    - name: edge_case_reviewer
+      instruction: Focus on edge cases, failure modes, and missing assumptions.
+  structured_synthesis: true
   self_moa_provider: local-ollama
   self_moa_samples: 4
   self_moa_temperature: 0.7
@@ -35,3 +41,26 @@ usable candidate by deterministic local scoring.
 
 Public traces show provider, requested sample count, mode, and call count. They do
 not request or expose hidden chain-of-thought.
+
+## Role-diverse panels
+
+`panel_roles` gives independent panel calls different public instructions. If more
+panel calls are made than roles are configured, OpenFusion cycles through the role
+list. This applies to `parallel_synthesis`, `critique_revision` draft generation,
+and `layered_refinement` panel layers. Public traces include the role name, not the
+role's private reasoning.
+
+## Structured synthesis
+
+When `structured_synthesis` is enabled, synthesis calls are prompted to return
+parseable public sections:
+
+- `consensus_points`
+- `contradictions`
+- `unique_insights`
+- `missing_information`
+- `final_answer`
+
+OpenFusion parses `final_answer` as the user-facing answer and stores the public
+sections in `workflow_outputs` when `include_workflow_outputs` is enabled. If the
+model returns invalid structure, OpenFusion degrades to the plain synthesized text.

@@ -13,6 +13,7 @@ OpenFusion is **not** weight-level model merging, and v0.4 is **not** a trained 
 ## What v0.4 adds
 
 - First-class Self-MoA strategies using repeated samples from one provider.
+- Role-diverse panel prompts and optional structured synthesis analysis.
 - Independent best-of-N sampling and selection.
 - Majority and provider-weighted consensus voting.
 - Generative parallel synthesis; legacy `panel_judge` remains an alias.
@@ -52,6 +53,8 @@ OpenFusion can also call providers directly without LiteLLM.
 |---|---|---:|
 | `fallback` | Try providers in order and return the first success. | 1 to panel size |
 | `parallel_synthesis` | Independent drafts, then a synthesizer writes a new answer. | drafts + 1 |
+| `self_moa` | Sample one provider repeatedly, then select or synthesize. | samples + 1 |
+| `self_moa_seq` | Batched Self-MoA with a running selected or fused answer. | bounded by budget |
 | `best_of_n` | Generate alternatives and select one unchanged answer. | candidates + 1 |
 | `majority_vote` | Normalize concise answers and choose the largest exact consensus group. | candidates |
 | `weighted_vote` | As above, but sum provider weights. | candidates |
@@ -144,26 +147,41 @@ providers:
 fusion:
   default_strategy: parallel_synthesis
   panel: [local-ollama]
+  panel_roles:
+    - name: factual_checker
+      instruction: Focus on factual accuracy and cite uncertainty.
+    - name: edge_case_reviewer
+      instruction: Focus on edge cases, failure modes, and missing assumptions.
+    - name: concise_summarizer
+      instruction: Produce the clearest concise answer.
   judge_provider: local-ollama
   critic_provider: local-ollama
   reviser_provider: local-ollama
   planner_provider:
+  self_moa_provider:
 
   max_parallel: 2
   max_total_calls: 8
   samples_per_provider: 1
   refinement_rounds: 1
+  self_moa_samples: 3
+  self_moa_batch_size: 4
+  self_moa_seq_carry_max_chars: 12000
 
   temperature: 0.2
   judge_temperature: 0.1
   critique_temperature: 0.1
+  self_moa_temperature: 0.7
+  self_moa_mode: synthesize
   max_tokens: 256
 
   require_at_least_successes: 1
   include_candidate_outputs: true
   include_workflow_outputs: true
+  structured_synthesis: false
   judge_candidate_max_chars: 4000
   transcript_max_chars: 12000
+  vote_answer_regex:
   adaptive_use_model_planner: false
 
 server:
@@ -372,6 +390,20 @@ Request overrides:
 }
 ```
 
+## Role-Diverse Panels
+
+Set `fusion.panel_roles` to give panel calls complementary public instructions such
+as factual checking, edge-case review, or concise summarization. Roles cycle when
+there are more panel calls than configured roles. Public traces include the role
+name only; role instructions are prompts, not hidden reasoning.
+
+Set `fusion.structured_synthesis: true` or request
+`"fusion_structured_synthesis": true` to ask synthesizers to return parseable public
+sections: `consensus_points`, `contradictions`, `unique_insights`,
+`missing_information`, and `final_answer`. Parsed sections appear in
+`openfusion.workflow_outputs` when `include_workflow_outputs` is true. If parsing
+fails, OpenFusion returns the plain synthesized answer.
+
 ## Python OpenAI SDK
 
 ```python
@@ -426,7 +458,7 @@ Every response includes an `openfusion` object containing:
 - candidate status and optional candidate text;
 - a public execution trace with stages, providers, latency, and errors;
 - usage summed across model calls;
-- optional public critique or vote summary.
+- optional public critique, vote summary, or structured synthesis sections.
 
 It does not request or expose hidden chain-of-thought.
 
@@ -436,7 +468,7 @@ It does not request or expose hidden chain-of-thought.
 - Leave the default host at `127.0.0.1` for local use.
 - Set a strong `OPENFUSION_API_KEY` before binding to `0.0.0.0`.
 - Set `include_candidate_outputs: false` when intermediate model text is sensitive.
-- Set `include_workflow_outputs: false` to suppress critique and vote summaries.
+- Set `include_workflow_outputs: false` to suppress critique, vote summaries, and structured synthesis sections.
 - Use `max_total_calls` to cap per-request model calls.
 - Model-generated planning cannot invent executable tools or arbitrary code paths.
 

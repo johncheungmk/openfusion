@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from openfusion.config import AppConfig, FusionConfig, ProviderConfig
+from openfusion.config import AppConfig, FusionConfig, PanelRoleConfig, ProviderConfig
 from openfusion.fusion import FusionEngine
 from openfusion.providers import ModelProvider, StaticProvider
 from openfusion.schema import CandidateResult, ChatMessage, ProviderRequest
@@ -53,6 +53,198 @@ async def test_best_of_n_selects_candidate_without_rewriting() -> None:
     assert result.strategy == "best_of_n"
     assert result.judge_analysis == "more accurate"
     assert [step.stage for step in result.trace] == ["candidate", "candidate", "selection"]
+
+
+@pytest.mark.asyncio
+async def test_panel_roles_are_applied_and_appear_in_trace() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Draft A"),
+        "b": StaticProvider(provider_config("b"), "Draft B"),
+        "judge": StaticProvider(provider_config("judge"), "Final answer."),
+    }
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("b"), provider_config("judge")],
+        fusion=FusionConfig(
+            panel=["a", "b"],
+            judge_provider="judge",
+            panel_roles=[
+                PanelRoleConfig(
+                    name="factual_checker",
+                    instruction="Focus on factual accuracy and cite uncertainty.",
+                ),
+                PanelRoleConfig(
+                    name="edge_case_reviewer",
+                    instruction="Focus on edge cases and missing assumptions.",
+                ),
+            ],
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Review this plan")],
+        strategy="parallel_synthesis",
+    )
+
+    assert [candidate.metadata["role_name"] for candidate in result.candidates] == [
+        "factual_checker",
+        "edge_case_reviewer",
+    ]
+    assert [step.role_name for step in result.trace[:2]] == [
+        "factual_checker",
+        "edge_case_reviewer",
+    ]
+    provider_request = providers["a"].last_request
+    assert provider_request is not None
+    role_message = "\n".join(str(message.content) for message in provider_request.messages)
+    assert "OpenFusion panel role: factual_checker" in role_message
+    assert "Focus on factual accuracy" in role_message
+
+
+@pytest.mark.asyncio
+async def test_panel_roles_cycle_when_fewer_roles_than_calls() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Draft A"),
+        "b": StaticProvider(provider_config("b"), "Draft B"),
+        "judge": StaticProvider(provider_config("judge"), "Final answer."),
+    }
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("b"), provider_config("judge")],
+        fusion=FusionConfig(
+            panel=["a", "b"],
+            judge_provider="judge",
+            samples_per_provider=2,
+            panel_roles=[
+                PanelRoleConfig(name="factual_checker", instruction="Check facts."),
+                PanelRoleConfig(name="concise_summarizer", instruction="Be concise."),
+            ],
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Draft an answer")],
+        strategy="parallel_synthesis",
+    )
+
+    assert [candidate.metadata["role_name"] for candidate in result.candidates] == [
+        "factual_checker",
+        "concise_summarizer",
+        "factual_checker",
+        "concise_summarizer",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_structured_synthesis_parse_success() -> None:
+    structured = (
+        '{"consensus_points":["Both drafts agree."],'
+        '"contradictions":["No contradiction."],'
+        '"unique_insights":["Draft B adds rollout risk."],'
+        '"missing_information":["Budget is unknown."],'
+        '"final_answer":"Use a staged rollout."}'
+    )
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Draft A"),
+        "b": StaticProvider(provider_config("b"), "Draft B"),
+        "judge": StaticProvider(provider_config("judge"), structured),
+    }
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("b"), provider_config("judge")],
+        fusion=FusionConfig(
+            panel=["a", "b"],
+            judge_provider="judge",
+            structured_synthesis=True,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Synthesize")],
+        strategy="parallel_synthesis",
+    )
+
+    assert result.final == "Use a staged rollout."
+    assert result.workflow_outputs["consensus_points"] == "Both drafts agree."
+    assert result.workflow_outputs["contradictions"] == "No contradiction."
+    assert result.workflow_outputs["unique_insights"] == "Draft B adds rollout risk."
+    assert result.workflow_outputs["missing_information"] == "Budget is unknown."
+    assert result.workflow_outputs["final_answer"] == "Use a staged rollout."
+    assert result.judge_analysis == "Structured synthesis parsed 2 independent candidate(s)."
+
+
+@pytest.mark.asyncio
+async def test_structured_synthesis_parse_failure_falls_back_to_plain_answer() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Draft A"),
+        "b": StaticProvider(provider_config("b"), "Draft B"),
+        "judge": StaticProvider(provider_config("judge"), "Plain fused answer."),
+    }
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("b"), provider_config("judge")],
+        fusion=FusionConfig(
+            panel=["a", "b"],
+            judge_provider="judge",
+            structured_synthesis=True,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Synthesize")],
+        strategy="parallel_synthesis",
+    )
+
+    assert result.final == "Plain fused answer."
+    assert result.workflow_outputs == {}
+    assert result.judge_analysis == "Structured synthesis parsing failed; returned plain synthesis."
+
+
+@pytest.mark.asyncio
+async def test_structured_workflow_outputs_can_be_suppressed() -> None:
+    structured = (
+        '{"consensus_points":["Shared point."],'
+        '"contradictions":[],"unique_insights":[],"missing_information":[],'
+        '"final_answer":"Public final."}'
+    )
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Draft A"),
+        "judge": StaticProvider(provider_config("judge"), structured),
+    }
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("judge")],
+        fusion=FusionConfig(
+            panel=["a"],
+            judge_provider="judge",
+            structured_synthesis=True,
+            include_workflow_outputs=False,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Synthesize")],
+        strategy="parallel_synthesis",
+    )
+
+    assert result.final == "Public final."
+    assert result.workflow_outputs == {}
+
+
+@pytest.mark.asyncio
+async def test_non_structured_synthesis_still_returns_plain_judge_answer() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Draft A"),
+        "judge": StaticProvider(provider_config("judge"), "Plain final answer."),
+    }
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("judge")],
+        fusion=FusionConfig(panel=["a"], judge_provider="judge", structured_synthesis=False),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Synthesize")],
+        strategy="parallel_synthesis",
+    )
+
+    assert result.final == "Plain final answer."
+    assert result.workflow_outputs == {}
+    assert result.judge_analysis == "Synthesized 1 independent candidate(s)."
 
 
 @pytest.mark.asyncio

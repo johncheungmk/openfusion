@@ -28,6 +28,15 @@ self-contained final answer. Do not merely select or concatenate a candidate. Do
 hidden chain-of-thought or private reasoning. Return only the useful user-facing answer.
 """
 
+STRUCTURED_SYNTHESIS_SYSTEM_PROMPT = """You are OpenFusion's structured synthesis agent.
+Use the supplied independent candidate answers as evidence, not as authorities.
+Return strict JSON only with exactly these keys:
+consensus_points, contradictions, unique_insights, missing_information, final_answer.
+The first four values must be public user-visible strings or arrays of strings. final_answer
+must be the complete user-facing answer. Do not expose hidden chain-of-thought or private
+reasoning.
+"""
+
 SELECTOR_SYSTEM_PROMPT = """You are OpenFusion's best-of-N evaluator.
 Choose the candidate that most accurately and completely answers the user's request.
 Do not rewrite the answer and do not expose hidden chain-of-thought. Return strict JSON only:
@@ -201,6 +210,7 @@ class FusionEngine:
         self_moa_provider: str | None = None,
         self_moa_samples: int | None = None,
         self_moa_mode: str | None = None,
+        structured_synthesis: bool | None = None,
     ) -> FusionResult:
         selected_strategy = canonical_strategy(strategy or self.config.fusion.default_strategy)
         panel_names = self._panel_names(panel)
@@ -209,6 +219,11 @@ class FusionEngine:
         selected_self_moa_mode = self_moa_mode or self.config.fusion.self_moa_mode
         if selected_self_moa_mode not in {"select", "synthesize"}:
             raise ValueError("self_moa_mode must be either 'select' or 'synthesize'")
+        use_structured_synthesis = (
+            self.config.fusion.structured_synthesis
+            if structured_synthesis is None
+            else structured_synthesis
+        )
         rounds = (
             self.config.fusion.refinement_rounds
             if refinement_rounds is None
@@ -261,6 +276,7 @@ class FusionEngine:
             self_moa_provider=self_moa_provider,
             self_moa_samples=self_samples,
             self_moa_mode=selected_self_moa_mode,
+            structured_synthesis=use_structured_synthesis,
             budget=budget,
             trace=trace,
         )
@@ -350,6 +366,7 @@ class FusionEngine:
         self_moa_provider: str | None,
         self_moa_samples: int,
         self_moa_mode: str,
+        structured_synthesis: bool,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
@@ -372,6 +389,7 @@ class FusionEngine:
                 max_tokens,
                 extra_body,
                 samples_per_provider,
+                structured_synthesis,
                 budget,
                 trace,
             )
@@ -452,6 +470,7 @@ class FusionEngine:
                 extra_body,
                 samples_per_provider,
                 refinement_rounds,
+                structured_synthesis,
                 budget,
                 trace,
             )
@@ -466,6 +485,7 @@ class FusionEngine:
         trace: list[WorkflowStep],
         stage: str,
         sample_index: int,
+        role_name: str | None = None,
     ) -> CandidateResult:
         provider = self.providers.get(provider_name)
         if provider is None:
@@ -476,12 +496,14 @@ class FusionEngine:
                 error=f"Provider not found or not enabled: {provider_name}",
                 stage=stage,
                 sample_index=sample_index,
+                metadata={"role_name": role_name} if role_name else {},
             )
             trace.append(
                 WorkflowStep(
                     stage=stage,
                     provider=provider_name,
                     model="unknown",
+                    role_name=role_name,
                     status="error",
                     note=result.error,
                 )
@@ -496,12 +518,14 @@ class FusionEngine:
                 error=f"Call budget exhausted ({budget.limit} calls)",
                 stage=stage,
                 sample_index=sample_index,
+                metadata={"role_name": role_name} if role_name else {},
             )
             trace.append(
                 WorkflowStep(
                     stage=stage,
                     provider=provider_name,
                     model=provider.config.model,
+                    role_name=role_name,
                     status="skipped",
                     note=result.error,
                 )
@@ -513,11 +537,14 @@ class FusionEngine:
         result.model = provider.config.model
         result.stage = stage
         result.sample_index = sample_index
+        if role_name:
+            result.metadata = {**result.metadata, "role_name": role_name}
         trace.append(
             WorkflowStep(
                 stage=stage,
                 provider=provider_name,
                 model=provider.config.model,
+                role_name=role_name,
                 status="ok" if result.ok and result.content.strip() else "error",
                 latency_ms=result.latency_ms,
                 note=None if result.ok else (result.error or "empty response")[:300],
@@ -533,17 +560,31 @@ class FusionEngine:
         budget: CallBudget,
         trace: list[WorkflowStep],
         stage: str,
+        use_panel_roles: bool = False,
     ) -> list[CandidateResult]:
         semaphore = asyncio.Semaphore(max(1, self.config.fusion.max_parallel))
         tasks = []
         total_requested = len(provider_names) * samples_per_provider
+        call_index = 0
         for provider_name in provider_names:
             for sample_index in range(1, samples_per_provider + 1):
+                role = self._panel_role(call_index) if use_panel_roles else None
                 sample_request = request
                 if total_requested > 1:
                     sample_request = request.model_copy(
                         update={
                             "messages": self._sampling_messages(request.messages, sample_index),
+                        },
+                        deep=True,
+                    )
+                if role is not None:
+                    sample_request = sample_request.model_copy(
+                        update={
+                            "messages": self._role_messages(
+                                sample_request.messages,
+                                role.name,
+                                role.instruction,
+                            ),
                         },
                         deep=True,
                     )
@@ -556,8 +597,10 @@ class FusionEngine:
                         trace,
                         stage=stage,
                         sample_index=sample_index,
+                        role_name=role.name if role is not None else None,
                     )
                 )
+                call_index += 1
         if not tasks:
             return []
         return list(await asyncio.gather(*tasks))
@@ -571,12 +614,19 @@ class FusionEngine:
         max_tokens: int | None,
         extra_body: dict[str, Any] | None,
         samples_per_provider: int,
+        structured_synthesis: bool,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
         request = self._provider_request(messages, temperature, max_tokens, extra_body)
         candidates = await self._generate_candidates(
-            panel, request, samples_per_provider, budget, trace, stage="draft"
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="draft",
+            use_panel_roles=True,
         )
         successes = self._successes(candidates)
         if len(successes) < self.config.fusion.require_at_least_successes:
@@ -596,16 +646,23 @@ class FusionEngine:
             budget,
             trace,
             stage="synthesis",
+            structured_synthesis=structured_synthesis,
         )
         usage = self._sum_usage(candidates) + judge_result.usage
         if judge_result.ok and judge_result.content.strip():
+            final, analysis, outputs = self._finalize_synthesis_result(
+                judge_result,
+                len(successes),
+                structured_synthesis,
+            )
             return FusionResult(
                 strategy="parallel_synthesis",
-                final=judge_result.content,
+                final=final,
                 judge_provider=selected_judge,
-                judge_analysis=f"Synthesized {len(successes)} independent candidate(s).",
+                judge_analysis=analysis,
                 candidates=self._visible_candidates(candidates),
                 usage=usage,
+                workflow_outputs=outputs,
             )
 
         best = self._deterministic_best(successes)
@@ -995,7 +1052,13 @@ class FusionEngine:
     ) -> FusionResult:
         request = self._provider_request(messages, temperature, max_tokens, extra_body)
         candidates = await self._generate_candidates(
-            panel, request, samples_per_provider, budget, trace, stage="draft"
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="draft",
+            use_panel_roles=True,
         )
         successes = self._successes(candidates)
         if len(successes) < self.config.fusion.require_at_least_successes:
@@ -1089,12 +1152,19 @@ class FusionEngine:
         extra_body: dict[str, Any] | None,
         samples_per_provider: int,
         refinement_rounds: int,
+        structured_synthesis: bool,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
         base_request = self._provider_request(messages, temperature, max_tokens, extra_body)
         all_candidates = await self._generate_candidates(
-            panel, base_request, samples_per_provider, budget, trace, stage="layer_0"
+            panel,
+            base_request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="layer_0",
+            use_panel_roles=True,
         )
         current = self._successes(all_candidates)
         if not current:
@@ -1121,6 +1191,7 @@ class FusionEngine:
                 budget,
                 trace,
                 stage=f"layer_{round_index}",
+                use_panel_roles=True,
             )
             all_candidates.extend(layer)
             layer_successes = self._successes(layer)
@@ -1143,14 +1214,26 @@ class FusionEngine:
             budget,
             trace,
             stage="final_synthesis",
+            structured_synthesis=structured_synthesis,
         )
         usage = self._sum_usage(all_candidates) + synthesis.usage
         if synthesis.ok and synthesis.content.strip():
-            final = synthesis.content
-            note = f"Synthesized the final refinement layer ({len(current)} candidate(s))."
+            final, note, outputs = self._finalize_synthesis_result(
+                synthesis,
+                len(current),
+                structured_synthesis,
+                plain_success=(
+                    f"Synthesized the final refinement layer ({len(current)} candidate(s))."
+                ),
+                structured_success=(
+                    f"Structured synthesis parsed the final refinement layer "
+                    f"({len(current)} candidate(s))."
+                ),
+            )
         else:
             final = self._deterministic_best(current).content
             note = f"Final synthesis failed: {synthesis.error or 'empty response'}"
+            outputs = {}
         return FusionResult(
             strategy="layered_refinement",
             final=final,
@@ -1158,6 +1241,7 @@ class FusionEngine:
             judge_analysis=note,
             candidates=self._visible_candidates(all_candidates),
             usage=usage,
+            workflow_outputs=outputs,
         )
 
     async def _fallback(
@@ -1206,10 +1290,18 @@ class FusionEngine:
         budget: CallBudget,
         trace: list[WorkflowStep],
         stage: str,
+        structured_synthesis: bool = False,
     ) -> CandidateResult:
         request = ProviderRequest(
             messages=[
-                ChatMessage(role="system", content=PARALLEL_SYNTHESIS_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="system",
+                    content=(
+                        STRUCTURED_SYNTHESIS_SYSTEM_PROMPT
+                        if structured_synthesis
+                        else PARALLEL_SYNTHESIS_SYSTEM_PROMPT
+                    ),
+                ),
                 ChatMessage(role="user", content=self._build_synthesis_prompt(messages, candidates)),
             ],
             temperature=self.config.fusion.judge_temperature,
@@ -1571,6 +1663,31 @@ class FusionEngine:
             return panel[0]
         raise ValueError("No enabled provider is available for the requested workflow role")
 
+    def _panel_role(self, call_index: int):
+        roles = self.config.fusion.panel_roles
+        if not roles:
+            return None
+        return roles[call_index % len(roles)]
+
+    def _role_messages(
+        self,
+        messages: list[ChatMessage],
+        role_name: str,
+        instruction: str,
+    ) -> list[ChatMessage]:
+        role_instruction = ChatMessage(
+            role="system",
+            content=(
+                f"OpenFusion panel role: {role_name}. Follow this public role instruction: "
+                f"{instruction.strip()} Do not mention the role name unless it is directly useful, "
+                "and do not expose hidden chain-of-thought."
+            ),
+        )
+        split = 0
+        while split < len(messages) and messages[split].role in {"system", "developer"}:
+            split += 1
+        return [*messages[:split], role_instruction, *messages[split:]]
+
     def _self_moa_role_provider(
         self,
         requested: str | None,
@@ -1807,6 +1924,66 @@ class FusionEngine:
         marker = f"\n[omitted {len(content) - limit} middle characters before carry-forward]\n"
         keep = max(1, (limit - len(marker)) // 2)
         return f"{content[:keep]}{marker}{content[-keep:]}"
+
+    def _finalize_synthesis_result(
+        self,
+        synthesis: CandidateResult,
+        candidate_count: int,
+        structured_synthesis: bool,
+        plain_success: str | None = None,
+        structured_success: str | None = None,
+    ) -> tuple[str, str, dict[str, str]]:
+        plain_success = plain_success or f"Synthesized {candidate_count} independent candidate(s)."
+        structured_success = structured_success or (
+            f"Structured synthesis parsed {candidate_count} independent candidate(s)."
+        )
+        if not structured_synthesis:
+            return synthesis.content, plain_success, {}
+
+        parsed = self._parse_structured_synthesis(synthesis.content)
+        if parsed is None:
+            return (
+                synthesis.content,
+                "Structured synthesis parsing failed; returned plain synthesis.",
+                {},
+            )
+
+        outputs = parsed if self.config.fusion.include_workflow_outputs else {}
+        return (
+            parsed["final_answer"],
+            structured_success,
+            outputs,
+        )
+
+    @staticmethod
+    def _parse_structured_synthesis(content: str) -> dict[str, str] | None:
+        data = _extract_json_object(content)
+        if data is None:
+            return None
+        required = (
+            "consensus_points",
+            "contradictions",
+            "unique_insights",
+            "missing_information",
+            "final_answer",
+        )
+        parsed: dict[str, str] = {}
+        for key in required:
+            if key not in data:
+                return None
+            rendered = FusionEngine._render_structured_section(data[key]).strip()
+            if key == "final_answer" and not rendered:
+                return None
+            parsed[key] = rendered
+        return parsed
+
+    @staticmethod
+    def _render_structured_section(value: Any) -> str:
+        if isinstance(value, list):
+            return "\n".join(str(item).strip() for item in value if str(item).strip())
+        if value is None:
+            return ""
+        return str(value)
 
     @staticmethod
     def _parse_selection(content: str, candidate_count: int) -> tuple[int, str] | None:

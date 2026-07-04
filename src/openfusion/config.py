@@ -41,12 +41,28 @@ class ProviderConfig(BaseModel):
         return None
 
 
+class PanelRoleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    instruction: str
+
+    @field_validator("name", "instruction")
+    @classmethod
+    def require_nonempty_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        return stripped
+
+
 class FusionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Legacy panel_judge remains accepted. parallel_synthesis is the clearer v0.2 name.
     default_strategy: str = "parallel_synthesis"
     panel: list[str] = Field(default_factory=list)
+    panel_roles: list[PanelRoleConfig] = Field(default_factory=list)
     judge_provider: str | None = None
     critic_provider: str | None = None
     reviser_provider: str | None = None
@@ -71,6 +87,7 @@ class FusionConfig(BaseModel):
     require_at_least_successes: int = 1
     include_candidate_outputs: bool = True
     include_workflow_outputs: bool = True
+    structured_synthesis: bool = False
     judge_candidate_max_chars: int = 4000
     transcript_max_chars: int = 12000
     vote_answer_regex: str | None = None
@@ -193,9 +210,11 @@ def write_example_config(path: str | Path) -> None:
         "fusion": {
             "default_strategy": "parallel_synthesis",
             "panel": ["local-ollama"],
+            "panel_roles": [],
             "judge_provider": "local-ollama",
             "self_moa_samples": 3,
             "self_moa_mode": "synthesize",
+            "structured_synthesis": False,
             "max_tokens": 256,
         },
     }

@@ -9,7 +9,7 @@ OpenRouter Fusion runs a panel in parallel, compares consensus and contradiction
 - https://openrouter.ai/docs/guides/features/plugins/fusion
 - https://openrouter.ai/blog/announcements/fusion-beats-frontier/
 
-OpenFusion's `parallel_synthesis` is the closest built-in analogue, without OpenRouter's proprietary panel selection or integrated web tools.
+OpenFusion's `parallel_synthesis` is the closest built-in analogue, without OpenRouter's proprietary panel selection or integrated web tools. OpenFusion v0.4 can optionally ask the synthesizer for public structured sections covering consensus, contradictions, unique insights, missing information, and the final answer.
 
 ## Self-consistency and voting
 
@@ -37,6 +37,8 @@ OpenFusion's `layered_refinement` implements a configurable, bounded version of 
 
 OpenFusion's `self_moa_seq` is a sequential, single-provider variant for larger sample counts or long candidates. It batches candidates and carries forward a running selected or fused answer instead of presenting every candidate to one final prompt.
 
+Role-diverse panel prompts are a practical engineering control for assigning complementary public perspectives to otherwise similar panel calls. They should be evaluated empirically; a role prompt is not a guarantee that a model will perform that function well.
+
 Research also warns that mixing lower-quality models can reduce performance, so provider diversity should be evaluated rather than assumed beneficial:
 
 - https://arxiv.org/abs/2502.00674
@@ -48,7 +50,7 @@ Multi-agent debate and round-table approaches explore iterative criticism and co
 - https://arxiv.org/abs/2305.19118
 - https://arxiv.org/abs/2309.13007
 
-OpenFusion v0.2 implements a controlled `critique_revision` workflow rather than unrestricted conversational debate.
+OpenFusion implements a controlled `critique_revision` workflow rather than unrestricted conversational debate.
 
 ## Sakana orchestration
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed Python package metadata version mismatch in pyproject.toml.
+- No runtime behavior changes.
 ## 0.5.0
 
 - Added OpenFusion Lab for local model-fusion experiments.

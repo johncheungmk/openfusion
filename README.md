@@ -4,20 +4,35 @@
 
 # OpenFusion
 
-**OpenFusion v0.4** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows.
+**OpenFusion v0.4.0** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows. It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique–revision, and execute bounded multi-layer refinement.
 
-It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique–revision, and execute bounded multi-layer refinement. Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
+Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
 
-OpenFusion is **not** the original Together AI Mixture-of-Agents implementation, not
-weight-level model merging, and not a trained Sakana Fugu-style learned
-orchestrator. It is also not a replacement for LiteLLM. It is a transparent,
-self-hostable, local-model-friendly runtime for OpenRouter-Fusion-like and
-MoA-inspired experiments where the workflow is explicit, bounded, and inspectable.
+OpenFusion is **not** the original Together AI Mixture-of-Agents implementation, not weight-level model merging, not a trained Sakana Fugu-style learned orchestrator, and not a replacement for LiteLLM. It is a transparent, self-hostable, local-model-friendly runtime for OpenRouter-Fusion-like and MoA-inspired experiments where the workflow is explicit, bounded, and inspectable.
 
-Do not claim benchmark gains from OpenFusion, MoA, Self-MoA, voting, ranking, or
-cascading strategies without task-specific evaluation. More agents and more calls
-can improve, match, or degrade results depending on model quality, task type,
-prompts, and budget.
+> Do not claim benchmark gains from OpenFusion, MoA, Self-MoA, voting, ranking, or cascading strategies without task-specific evaluation. More agents and more calls can improve, match, or degrade results depending on model quality, task type, prompts, and budget.
+
+---
+
+## Highlights in v0.4.0
+
+- First-class `self_moa` and `self_moa_seq` strategies.
+- Role-diverse panel prompts and optional structured synthesis analysis.
+- `pairwise_rank_fuse` for rank-then-fuse workflows.
+- `semantic_vote` for concise exact or semantically equivalent answers.
+- `uncertainty_cascade` for confidence-aware escalation.
+- Independent best-of-N sampling and selection.
+- Majority and provider-weighted consensus voting.
+- Generative parallel synthesis; legacy `panel_judge` remains an alias.
+- Critic → reviser workflows with distinct model roles.
+- Mixture-of-agents-style layered refinement.
+- Adaptive planning using transparent heuristics or an optional constrained model planner.
+- Hard per-request model-call budget.
+- Public workflow plans and execution traces without hidden chain-of-thought.
+- JSONL evaluation with equal-budget comparison, latency, calls, token totals, and optional LLM pairwise/rubric grading.
+- Clear timeout errors for slow local models.
+
+---
 
 ## Positioning
 
@@ -28,43 +43,27 @@ prompts, and budget.
 | Sakana Fugu | No public implementation | No | No direct local hosting | Product/model endpoint | Yes, positioned as learned orchestration | Not user-configurable as local workflows | Not a local trace runtime | No local built-in evaluator | Not gateway focused | Learned model orchestration system |
 | LiteLLM | Yes | Yes | Yes, through configured providers | Yes | No | Routing/gateway policies, not MoA workflows | Gateway logs/observability | No MoA evaluation harness | Strong | Provider gateway, key management, budgets, routing, observability |
 
-## What v0.4 adds
-
-- First-class Self-MoA strategies using repeated samples from one provider.
-- Role-diverse panel prompts and optional structured synthesis analysis.
-- Uncertainty-based cascading for confidence-aware cost control.
-- Independent best-of-N sampling and selection.
-- Majority and provider-weighted consensus voting.
-- Generative parallel synthesis; legacy `panel_judge` remains an alias.
-- Critic → reviser workflows with distinct model roles.
-- Mixture-of-agents-style layered refinement.
-- Adaptive planning using transparent heuristics or an optional constrained model planner.
-- A hard per-request model-call budget.
-- Public workflow plans and execution traces without hidden chain-of-thought.
-- A JSONL exact-match evaluation command.
-- Clear timeout errors for slow local models.
+---
 
 ## Model gateway versus fusion runtime
 
-A gateway such as LiteLLM focuses on provider access, keys, routing, budgets, load balancing, and observability. OpenFusion focuses on what happens **after one request may involve several model calls**.
+A gateway such as LiteLLM focuses on provider access, keys, routing, budgets, load balancing, and observability. OpenFusion focuses on what happens **after one user request may involve several model calls**.
 
 A useful production arrangement is:
 
 ```text
 Application / agent / RAG service
-              |
-              v
-         OpenFusion
-  deliberation and synthesis
-              |
-              v
- LiteLLM or another AI gateway
-              |
-              v
- local and cloud model providers
+        ↓
+OpenFusion deliberation and synthesis
+        ↓
+LiteLLM or another AI gateway
+        ↓
+Local and cloud model providers
 ```
 
 OpenFusion can also call providers directly without LiteLLM.
+
+---
 
 ## Strategies
 
@@ -84,7 +83,9 @@ OpenFusion can also call providers directly without LiteLLM.
 | `layered_refinement` | Independent layer → one or more refinement layers → synthesis. | multiple layers + 1 |
 | `adaptive` | Choose a bounded workflow using heuristics or an optional model planner. | depends on plan |
 
-Voting is most suitable for concise, multiple-choice, classification, or regex-extractable answers. Open-ended prose usually benefits more from synthesis or critique–revision.
+Voting is most suitable for concise, multiple-choice, classification, or regex-extractable answers. Open-ended prose usually benefits more from synthesis, ranking, critique–revision, or layered refinement.
+
+---
 
 ## Quick start
 
@@ -93,12 +94,10 @@ Voting is most suitable for concise, multiple-choice, classification, or regex-e
 ```powershell
 git clone https://github.com/johncheungmk/openfusion.git
 cd openfusion
-
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-
 Copy-Item .env.example .env
 openfusion init --path openfusion.yaml
 ```
@@ -108,31 +107,40 @@ openfusion init --path openfusion.yaml
 ```bash
 git clone https://github.com/johncheungmk/openfusion.git
 cd openfusion
-
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
-
 cp .env.example .env
 openfusion init --path openfusion.yaml
 ```
 
+---
+
 ## The configuration file you must edit
 
-The command below creates the runtime configuration file:
+The runtime configuration file is:
 
 ```text
 openfusion.yaml
 ```
 
+Create it with:
+
 ```bash
 openfusion init --path openfusion.yaml
 ```
 
-After running it, edit **`openfusion.yaml` in the repository root**. Do not edit `.env.example`; `.env` contains secrets, while `openfusion.yaml` contains provider names, model names, roles, and workflow settings.
+After running the command, edit **`openfusion.yaml` in the repository root**.
 
-### Local-only Ollama setup
+Do **not** edit `.env.example`. Use:
+
+- `.env` for secrets such as `OPENAI_API_KEY` and `OPENFUSION_API_KEY`;
+- `openfusion.yaml` for provider names, model names, roles, strategy defaults, and workflow settings.
+
+---
+
+## Local-only Ollama setup
 
 First inspect or install an Ollama model.
 
@@ -152,7 +160,7 @@ ollama pull llama3.2:3b
 nano openfusion.yaml
 ```
 
-Make the `model` value in `openfusion.yaml` exactly match `ollama list`:
+Make the `model` value in `openfusion.yaml` exactly match a model name returned by `ollama list`:
 
 ```yaml
 providers:
@@ -169,6 +177,7 @@ providers:
 fusion:
   default_strategy: parallel_synthesis
   panel: [local-ollama]
+
   panel_roles:
     - name: factual_checker
       instruction: Focus on factual accuracy and cite uncertainty.
@@ -176,26 +185,31 @@ fusion:
       instruction: Focus on edge cases, failure modes, and missing assumptions.
     - name: concise_summarizer
       instruction: Produce the clearest concise answer.
+
   judge_provider: local-ollama
   critic_provider: local-ollama
   reviser_provider: local-ollama
   planner_provider:
-  self_moa_provider:
-  ranker_provider:
-  fuser_provider:
+  self_moa_provider: local-ollama
+  ranker_provider: local-ollama
+  fuser_provider: local-ollama
   vote_equivalence_provider:
+
   cascade_providers: [local-ollama]
 
   max_parallel: 2
   max_total_calls: 8
   samples_per_provider: 1
   refinement_rounds: 1
+
   self_moa_samples: 3
   self_moa_batch_size: 4
   self_moa_seq_carry_max_chars: 12000
+
   rank_top_k: 3
   pairwise_rank_max_pairs: 12
   semantic_vote_max_pairs: 12
+
   cascade_consistency_samples: 1
   cascade_max_steps: 3
 
@@ -203,17 +217,19 @@ fusion:
   judge_temperature: 0.1
   critique_temperature: 0.1
   self_moa_temperature: 0.7
+
   self_moa_mode: synthesize
   pairwise_rank_mode: pairwise
   semantic_vote_mode: rule_only
   cascade_confidence_threshold: 0.75
   cascade_escalate_on_disagreement: true
-  max_tokens: 256
 
+  max_tokens: 256
   require_at_least_successes: 1
   include_candidate_outputs: true
   include_workflow_outputs: true
   structured_synthesis: false
+
   judge_candidate_max_chars: 4000
   transcript_max_chars: 12000
   vote_answer_regex:
@@ -227,7 +243,9 @@ server:
 
 For large CPU-only models, `timeout_seconds: 300` and `max_tokens: 128` or `256` are sensible starting points. A panel workflow can call the same model more than once, so it is naturally slower than direct routing.
 
-### Cloud plus local example
+---
+
+## Cloud plus local example
 
 Put API keys in `.env`:
 
@@ -268,6 +286,8 @@ fusion:
   max_tokens: 512
 ```
 
+---
+
 ## Validate and start
 
 PowerShell:
@@ -295,6 +315,8 @@ Health check:
 ```bash
 curl http://localhost:8000/health
 ```
+
+---
 
 ## Test direct provider routing first
 
@@ -343,6 +365,8 @@ curl http://localhost:8000/v1/chat/completions \
   }'
 ```
 
+---
+
 ## Run orchestration strategies
 
 CLI:
@@ -354,7 +378,7 @@ openfusion chat "Compare two RAG deployment designs." \
   --show-trace
 ```
 
-OpenAI-compatible API:
+OpenAI-compatible API request body:
 
 ```json
 {
@@ -375,7 +399,7 @@ Available model IDs include:
 ```text
 openfusion/adaptive
 openfusion/parallel-synthesis
-openfusion/panel-judge            # legacy alias
+openfusion/panel-judge          # legacy alias
 openfusion/self-moa
 openfusion/self-moa-seq
 openfusion/pairwise-rank-fuse
@@ -390,11 +414,11 @@ openfusion/fallback
 provider/{provider-name}/{configured-model}
 ```
 
+---
+
 ## Adaptive planning
 
-Adaptive mode is deliberately constrained. It can choose only enabled providers and built-in strategies, and every request has a hard call budget.
-
-By default it uses transparent heuristics and spends no planning model call:
+Adaptive mode is deliberately constrained. It can choose only enabled providers and built-in strategies, and every request has a hard call budget. By default it uses transparent heuristics and spends no planning model call:
 
 ```bash
 openfusion plan "Review three RAG architectures and recommend one." \
@@ -403,24 +427,29 @@ openfusion plan "Review three RAG architectures and recommend one." \
 
 To use a model-generated JSON plan, configure `planner_provider`, set `adaptive_use_model_planner: true`, or pass `--model-planner`. This consumes one call before workflow execution. Invalid plans fall back to heuristics.
 
+---
+
 ## Self-MoA
 
-`openfusion/self-moa` samples one provider multiple times, then either selects the best
-unchanged sample or synthesizes a new answer. Configure `fusion.self_moa_provider`,
-`fusion.self_moa_samples`, `fusion.self_moa_temperature`, and `fusion.self_moa_mode`.
+`openfusion/self-moa` samples one provider multiple times, then either selects the best unchanged sample or synthesizes a new answer. Configure:
+
+- `fusion.self_moa_provider`
+- `fusion.self_moa_samples`
+- `fusion.self_moa_temperature`
+- `fusion.self_moa_mode`
+
 If the provider is unset, OpenFusion uses `judge_provider`, then the first panel provider.
 
-`openfusion/self-moa-seq` batches the samples and carries forward a running best or
-fused answer for long candidate sets. Tune `fusion.self_moa_batch_size` and
-`fusion.self_moa_seq_carry_max_chars` for large jobs. Both strategies obey
-`max_total_calls` and expose public trace metadata without hidden chain-of-thought.
+`openfusion/self-moa-seq` batches the samples and carries forward a running best or fused answer for long candidate sets. Tune `fusion.self_moa_batch_size` and `fusion.self_moa_seq_carry_max_chars` for large jobs. Both strategies obey `max_total_calls` and expose public trace metadata without hidden chain-of-thought.
 
-Request overrides:
+Request override example:
 
 ```json
 {
   "model": "openfusion/self-moa",
-  "messages": [{"role": "user", "content": "Solve this carefully."}],
+  "messages": [
+    {"role": "user", "content": "Solve this carefully."}
+  ],
   "fusion_self_moa_provider": "local-ollama",
   "fusion_self_moa_samples": 4,
   "fusion_self_moa_mode": "synthesize",
@@ -428,48 +457,55 @@ Request overrides:
 }
 ```
 
-## Role-Diverse Panels
+---
 
-Set `fusion.panel_roles` to give panel calls complementary public instructions such
-as factual checking, edge-case review, or concise summarization. Roles cycle when
-there are more panel calls than configured roles. Public traces include the role
-name only; role instructions are prompts, not hidden reasoning.
+## Role-diverse panels and structured synthesis
 
-Set `fusion.structured_synthesis: true` or request
-`"fusion_structured_synthesis": true` to ask synthesizers to return parseable public
-sections: `consensus_points`, `contradictions`, `unique_insights`,
-`missing_information`, and `final_answer`. Parsed sections appear in
-`openfusion.workflow_outputs` when `include_workflow_outputs` is true. If parsing
-fails, OpenFusion returns the plain synthesized answer.
+Set `fusion.panel_roles` to give panel calls complementary public instructions such as factual checking, edge-case review, or concise summarization. Roles cycle when there are more panel calls than configured roles. Public traces include the role name only; role instructions are prompts, not hidden reasoning.
 
-## Ranking and Semantic Voting
 
-`openfusion/pairwise-rank-fuse` generates panel candidates, ranks them with
-`ranker_provider`, then fuses the top `rank_top_k` candidates with `fuser_provider`
-or `judge_provider`. `pairwise_rank_mode: pairwise` performs bounded candidate
-comparisons up to `pairwise_rank_max_pairs`; `score` asks for parseable JSON scores
-in one ranker call. If ranking output cannot be parsed, OpenFusion preserves
-candidate order and still attempts synthesis.
+Set `fusion.structured_synthesis: true` or request `"fusion_structured_synthesis": true` to ask synthesizers to return parseable public sections:
 
-`openfusion/semantic-vote` keeps `majority_vote` and `weighted_vote` unchanged while
-adding a separate voting strategy. `semantic_vote_mode: rule_only` uses normalized
-exact voting. `llm_equivalence` asks `vote_equivalence_provider` whether concise
-answers are semantically the same, capped by `semantic_vote_max_pairs` and
-`max_total_calls`. Without an equivalence provider, it falls back to rule-only
-grouping.
+- `consensus_points`
+- `contradictions`
+- `unique_insights`
+- `missing_information`
+- `final_answer`
 
-## Uncertainty Cascade
+Parsed sections appear in `openfusion.workflow_outputs` when `include_workflow_outputs` is true. If parsing fails, OpenFusion returns the plain synthesized answer.
 
-`openfusion/uncertainty-cascade` starts with `fusion.cascade_providers[0]`, or the
-first panel provider when no cascade list is configured. Each provider returns a
-concise answer plus a public confidence score. OpenFusion escalates to the next
-provider on provider failure, confidence below `cascade_confidence_threshold`,
-sample disagreement when `cascade_consistency_samples` is greater than one, or
-invalid response format.
+---
 
-The cascade is bounded by `cascade_max_steps` and `max_total_calls`. Public trace
-entries show the provider attempted, confidence, disagreement status, and escalation
-reason without hidden chain-of-thought.
+## Ranking and semantic voting
+
+`openfusion/pairwise-rank-fuse` generates panel candidates, ranks them with `ranker_provider`, then fuses the top `rank_top_k` candidates with `fuser_provider` or `judge_provider`.
+
+- `pairwise_rank_mode: pairwise` performs bounded candidate comparisons up to `pairwise_rank_max_pairs`.
+- `pairwise_rank_mode: score` asks for parseable JSON scores in one ranker call.
+- If ranking output cannot be parsed, OpenFusion preserves candidate order and still attempts synthesis.
+
+`openfusion/semantic-vote` keeps `majority_vote` and `weighted_vote` unchanged while adding a separate voting strategy.
+
+- `semantic_vote_mode: rule_only` uses normalized exact voting.
+- `semantic_vote_mode: llm_equivalence` asks `vote_equivalence_provider` whether concise answers are semantically the same, capped by `semantic_vote_max_pairs` and `max_total_calls`.
+- Without an equivalence provider, it falls back to rule-only grouping.
+
+---
+
+## Uncertainty cascade
+
+`openfusion/uncertainty-cascade` starts with `fusion.cascade_providers[0]`, or the first panel provider when no cascade list is configured. Each provider returns a concise answer plus a public confidence score.
+
+OpenFusion escalates to the next provider on:
+
+- provider failure;
+- confidence below `cascade_confidence_threshold`;
+- sample disagreement when `cascade_consistency_samples` is greater than one;
+- invalid response format.
+
+The cascade is bounded by `cascade_max_steps` and `max_total_calls`. Public trace entries show the provider attempted, confidence, disagreement status, and escalation reason without hidden chain-of-thought.
+
+---
 
 ## Python OpenAI SDK
 
@@ -491,8 +527,11 @@ completion = client.chat.completions.create(
         "fusion_max_total_calls": 8,
     },
 )
+
 print(completion.choices[0].message.content)
 ```
+
+---
 
 ## Evaluation
 
@@ -505,14 +544,18 @@ Example JSONL:
 {"id":"mcq-1","prompt":"Final answer only. A) red B) blue","reference":"B","answer_regex":"(?:Final answer|Answer):\\s*([A-D])"}
 ```
 
-Run:
+Run a single strategy:
 
 ```bash
 openfusion evaluate examples/eval_sample.jsonl \
   --config openfusion.yaml \
   --strategy weighted_vote \
   --output evaluation-report.json
+```
 
+Run an equal-budget comparison:
+
+```bash
 openfusion evaluate examples/eval_moa_sample.jsonl \
   --config openfusion.yaml \
   --compare-strategies fallback,self_moa,parallel_synthesis \
@@ -520,9 +563,7 @@ openfusion evaluate examples/eval_moa_sample.jsonl \
   --output comparison-report.json
 ```
 
-Reports include accuracy, win/tie/loss rates versus the fallback baseline, call
-counts, latency percentiles, token totals, cost placeholder, accuracy per call,
-accuracy per 1k tokens, and strategy failures.
+Reports include accuracy, win/tie/loss rates versus the fallback baseline, call counts, latency percentiles, token totals, cost placeholder, accuracy per call, accuracy per 1k tokens, and strategy failures.
 
 ### Recommended baselines for papers
 
@@ -537,14 +578,11 @@ For any paper, blog post, or benchmark claim, compare against:
 - `semantic_vote` for short-answer tasks;
 - `uncertainty_cascade` for cost-sensitive tasks.
 
-Use equal `max_total_calls` budgets where possible, and report latency, token use,
-call counts, and failures alongside quality. Do not claim benchmark gains without
-evaluation on representative data.
+Use equal `max_total_calls` budgets where possible, and report latency, token use, call counts, and failures alongside quality.
 
-The default grader is exact match. Optional `--grader llm_pairwise` and
-`--grader llm_rubric --grader-provider PROVIDER` are useful for qualitative
-inspection, but LLM judge results are not ground truth. Treat them as noisy model
-outputs and validate important claims with task-specific graders or human review.
+The default grader is exact match. Optional `--grader llm_pairwise` and `--grader llm_rubric --grader-provider PROVIDER` are useful for qualitative inspection, but LLM judge results are not ground truth. Treat them as noisy model outputs and validate important claims with task-specific graders or human review.
+
+---
 
 ## Response metadata
 
@@ -555,9 +593,11 @@ Every response includes an `openfusion` object containing:
 - candidate status and optional candidate text;
 - a public execution trace with stages, providers, latency, and errors;
 - usage summed across model calls;
-- optional public critique, vote summary, or structured synthesis sections.
+- optional public critique, vote summary, ranking result, cascade decision, or structured synthesis sections.
 
 It does not request or expose hidden chain-of-thought.
+
+---
 
 ## Security and cost notes
 
@@ -565,29 +605,46 @@ It does not request or expose hidden chain-of-thought.
 - Leave the default host at `127.0.0.1` for local use.
 - Set a strong `OPENFUSION_API_KEY` before binding to `0.0.0.0`.
 - Set `include_candidate_outputs: false` when intermediate model text is sensitive.
-- Set `include_workflow_outputs: false` to suppress critique, vote summaries, and structured synthesis sections.
+- Set `include_workflow_outputs: false` to suppress critique, vote summaries, rankings, cascade decisions, and structured synthesis sections.
 - Use `max_total_calls` to cap per-request model calls.
 - Model-generated planning cannot invent executable tools or arbitrary code paths.
 
 See [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/LITELLM.md](docs/LITELLM.md).
 
+---
+
 ## Research positioning
 
-OpenFusion v0.4 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, multi-agent debate, OpenRouter Fusion, and Sakana's orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging. See [docs/RESEARCH.md](docs/RESEARCH.md).
+OpenFusion v0.4.0 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, Self-MoA, multi-agent debate, OpenRouter Fusion, routing/cascade research, and Sakana-style orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging.
 
-## Migration from v0.1
+OpenFusion is useful for studying questions such as:
 
-- `panel_judge` still works but is normalized to `parallel_synthesis` in metadata.
-- New config fields have defaults, so an existing valid v0.1 config should continue to load.
-- `/health` now includes version and strategy names.
-- More strategy model IDs appear in `/v1/models`.
-- Provider timeout errors are now explicit.
+- When does Self-MoA outperform mixed-model MoA?
+- When does ranking plus fusion beat simple synthesis?
+- When is semantic voting better than exact voting?
+- When does uncertainty cascading save cost without hurting quality?
+- How much latency and token usage does each strategy add?
 
-See [docs/MIGRATION_V2.md](docs/MIGRATION_V2.md).
+See [docs/RESEARCH.md](docs/RESEARCH.md), [docs/MOA.md](docs/MOA.md), and [docs/EVALUATION.md](docs/EVALUATION.md).
+
+---
+
+## Migration notes
+
+- `panel_judge` still works but is normalized to `parallel_synthesis` in response metadata.
+- Earlier valid configs should continue to load because new config fields have defaults.
+- `/health` includes version and strategy names.
+- `/v1/models` lists the expanded v0.4 strategy model IDs.
+- Provider timeout errors are explicit.
+- v0.4 adds Self-MoA, sequential Self-MoA, pairwise ranking, semantic voting, uncertainty cascade, role-diverse prompts, structured synthesis, and equal-budget evaluation.
+
+See [docs/MIGRATION_V2.md](docs/MIGRATION_V2.md) for earlier migration details.
+
+---
 
 ## Development and Codex CLI
 
-The repository includes `AGENTS.md`, which Codex CLI discovers automatically when it starts from the repository root. `CODEX_INSTRUCTIONS.md` provides a longer maintenance checklist, and `docs/CODEX_V2_UPGRADE.md` contains the reproducible v0.1-to-v0.2 upgrade prompt.
+The repository includes `AGENTS.md`, which Codex CLI discovers automatically when it starts from the repository root. `CODEX_INSTRUCTIONS.md` provides a longer maintenance checklist.
 
 Interactive Codex session:
 
@@ -599,7 +656,7 @@ codex
 One-shot review:
 
 ```bash
-codex "Review this OpenFusion v0.2 tree, run the required checks in AGENTS.md, and fix only verified issues."
+codex "Review this OpenFusion repository, run the required checks in AGENTS.md, and fix only verified issues."
 ```
 
 Manual development checks:
@@ -612,6 +669,14 @@ pytest -q
 python -m build
 git diff --check
 ```
+
+On Windows, if pytest cannot write to the default temp directory, use a local temp directory:
+
+```powershell
+pytest -q --basetemp .pytest-tmp
+```
+
+---
 
 ## License
 

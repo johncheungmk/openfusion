@@ -1,4 +1,4 @@
-# OpenFusion v0.4 configuration.
+# OpenFusion configuration.
 # After `openfusion init --path openfusion.yaml`, edit openfusion.yaml (not this template)
 # and make each model name match the model server you actually use.
 providers:

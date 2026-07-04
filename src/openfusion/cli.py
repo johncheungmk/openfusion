@@ -12,10 +12,23 @@ from rich.table import Table
 from .config import load_config, write_example_config
 from .evaluation import compare_strategies, evaluate_cases, load_jsonl
 from .fusion import FusionEngine
+from .lab import (
+    build_engine_plan,
+    export_result_card,
+    load_lab_config,
+    load_lab_dataset,
+    load_result_card,
+    recommend_from_card,
+    run_lab_experiment_sync,
+    search_huggingface_models,
+    write_generated_config,
+)
 from .schema import ChatMessage
 from .server import create_app
 
 app = typer.Typer(help="OpenFusion: open-source multi-model orchestration and fusion")
+lab_app = typer.Typer(help="OpenFusion Lab experiment runner")
+app.add_typer(lab_app, name="lab")
 console = Console()
 
 STRATEGY_HELP = {
@@ -261,6 +274,155 @@ def evaluate(
             await engine.aclose()
 
     asyncio.run(_run())
+
+
+@lab_app.command("validate")
+def lab_validate(lab_yaml: str = typer.Argument(..., help="Path to lab.yaml.")) -> None:
+    """Validate an OpenFusion Lab experiment file."""
+    cfg = load_lab_config(lab_yaml)
+    configured_dataset_path = Path(cfg.dataset.path)
+    dataset_path = (
+        configured_dataset_path
+        if configured_dataset_path.exists()
+        else Path(lab_yaml).resolve().parent / cfg.dataset.path
+    )
+    examples = load_lab_dataset(
+        dataset_path,
+        max_examples=cfg.experiment.max_examples,
+        seed=cfg.experiment.seed,
+    )
+    console.print(f"[bold]Experiment[/bold]: {cfg.experiment.name}")
+    if cfg.experiment.description:
+        console.print(cfg.experiment.description)
+    console.print(f"[bold]Dataset[/bold]: {cfg.dataset.name} ({cfg.dataset.path})")
+    console.print(f"[bold]Examples[/bold]: {len(examples)}")
+
+    engine_table = Table(title="Lab engines")
+    for column in ("Name", "Type", "Base URL", "Launch"):
+        engine_table.add_column(column)
+    for engine in cfg.engines:
+        engine_table.add_row(engine.name, engine.type, engine.base_url, engine.launch)
+    console.print(engine_table)
+
+    model_table = Table(title="Lab models")
+    for column in ("Provider", "Engine", "Model", "Weight", "Timeout"):
+        model_table.add_column(column)
+    for model in cfg.models:
+        model_table.add_row(
+            model.provider_name,
+            model.engine,
+            model.model,
+            f"{model.weight:g}",
+            f"{model.timeout_seconds:g}s",
+        )
+    console.print(model_table)
+    console.print("[bold]Strategies[/bold]: " + ", ".join(strategy.name for strategy in cfg.strategies))
+
+
+@lab_app.command("generate-config")
+def lab_generate_config(
+    lab_yaml: str = typer.Argument(..., help="Path to lab.yaml."),
+    out: str = typer.Option("openfusion.lab.generated.yaml", help="Generated config path."),
+) -> None:
+    """Generate an OpenFusion runtime config from lab.yaml."""
+    cfg = load_lab_config(lab_yaml)
+    write_generated_config(cfg, out)
+    console.print(f"[green]Wrote[/green] {out}")
+
+
+@lab_app.command("run")
+def lab_run(
+    lab_yaml: str = typer.Argument(..., help="Path to lab.yaml."),
+    out: str = typer.Option("results.json", help="Result card path."),
+    include_samples: bool = typer.Option(
+        False,
+        "--include-samples",
+        help="Include per-example result IDs and metrics. Raw prompts and references are never included.",
+    ),
+) -> None:
+    """Run a lab experiment and save a result-card JSON file."""
+    cfg = load_lab_config(lab_yaml)
+    card = run_lab_experiment_sync(cfg, lab_path=lab_yaml, include_samples=include_samples)
+    Path(out).write_text(card.model_dump_json(indent=2), encoding="utf-8")
+    console.print(f"[green]Wrote[/green] {out}")
+    _print_recommendation(card.recommendations)
+
+
+@lab_app.command("recommend")
+def lab_recommend(results_json: str = typer.Argument(..., help="Path to result card JSON.")) -> None:
+    """Print strategy recommendations from a result card."""
+    card = load_result_card(results_json)
+    recommendation = recommend_from_card(card)
+    _print_recommendation(recommendation)
+
+
+@lab_app.command("export")
+def lab_export(
+    results_json: str = typer.Argument(..., help="Path to result card JSON."),
+    out: str = typer.Option("result-card.json", help="Normalized result-card path."),
+) -> None:
+    """Normalize and write a shareable result card."""
+    export_result_card(results_json, out)
+    console.print(f"[green]Wrote[/green] {out}")
+
+
+@lab_app.command("search-models")
+def lab_search_models(
+    query: str | None = typer.Option(None, "--query", help="Search text."),
+    limit: int = typer.Option(10, "--limit", min=1, max=100, help="Maximum models."),
+    license: str | None = typer.Option(None, "--license", help="License filter."),
+    sort: str = typer.Option(
+        "downloads",
+        "--sort",
+        help="Sort by downloads, likes, or lastModified.",
+    ),
+) -> None:
+    """Search the Hugging Face model catalog without downloading models."""
+    if sort not in {"downloads", "likes", "lastModified"}:
+        raise typer.BadParameter("sort must be downloads, likes, or lastModified")
+    models = search_huggingface_models(
+        query=query,
+        limit=limit,
+        license=license,
+        sort=sort,  # type: ignore[arg-type]
+    )
+    table = Table(title="Hugging Face model candidates")
+    for column in ("Model", "Downloads", "Likes", "Last Modified", "Pipeline", "License"):
+        table.add_column(column)
+    for model in models:
+        table.add_row(
+            str(model.get("modelId") or "-"),
+            str(model.get("downloads") or 0),
+            str(model.get("likes") or 0),
+            str(model.get("lastModified") or "-"),
+            str(model.get("pipeline_tag") or "-"),
+            str(model.get("license") or "-"),
+        )
+    console.print(table)
+    console.print("Advisory only: no models were downloaded and trust_remote_code was not used.")
+
+
+@lab_app.command("engine-plan")
+def lab_engine_plan(lab_yaml: str = typer.Argument(..., help="Path to lab.yaml.")) -> None:
+    """Print manual engine launch guidance."""
+    cfg = load_lab_config(lab_yaml)
+    console.print(build_engine_plan(cfg))
+
+
+def _print_recommendation(recommendation) -> None:
+    console.print("[bold]Recommendations[/bold]")
+    console.print(f"best_accuracy: {recommendation.best_accuracy}")
+    console.print(f"best_latency: {recommendation.best_latency}")
+    console.print(f"best_efficiency: {recommendation.best_efficiency}")
+    console.print(f"best_balanced: {recommendation.best_balanced}")
+    if recommendation.explanations:
+        console.print("\n[bold]Explanations[/bold]")
+        for explanation in recommendation.explanations:
+            console.print(f"- {explanation}")
+    if recommendation.warnings:
+        console.print("\n[bold yellow]Warnings[/bold yellow]")
+        for warning in recommendation.warnings:
+            console.print(f"- {warning}")
 
 
 @app.command()

@@ -4,7 +4,7 @@
 
 # OpenFusion
 
-**OpenFusion v0.4.0** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows. It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique–revision, and execute bounded multi-layer refinement.
+**OpenFusion v0.5.0** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows. It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique-revision, execute bounded multi-layer refinement, and run local OpenFusion Lab experiments.
 
 Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
 
@@ -14,8 +14,10 @@ OpenFusion is **not** the original Together AI Mixture-of-Agents implementation,
 
 ---
 
-## Highlights in v0.4.0
+## Highlights in v0.5.0
 
+- OpenFusion Lab for local model-fusion experiments.
+- `lab.yaml` validation, generated runtime config, result-card export, recommendations, model search, and engine launch guidance.
 - First-class `self_moa` and `self_moa_seq` strategies.
 - Role-diverse panel prompts and optional structured synthesis analysis.
 - `pairwise_rank_fuse` for rank-then-fuse workflows.
@@ -533,6 +535,48 @@ print(completion.choices[0].message.content)
 
 ---
 
+## OpenFusion Lab
+
+OpenFusion Lab helps you run controlled local experiments across OpenAI-compatible engines, models, and fusion strategies, then exports a result card that can later support leaderboard workflows.
+
+Typical workflow:
+
+- Choose models and engines in `lab.yaml`.
+- Start Ollama, vLLM, TGI, or other OpenAI-compatible engines manually.
+- Generate an OpenFusion runtime config:
+
+```bash
+openfusion lab generate-config examples/lab_llama_gptoss.yaml --out openfusion.lab.generated.yaml
+```
+
+- Validate the lab and dataset:
+
+```bash
+openfusion lab validate examples/lab_llama_gptoss.yaml
+```
+
+- Run strategies and compare results:
+
+```bash
+openfusion lab run examples/lab_llama_gptoss.yaml --out results.json
+```
+
+- Read the recommendation report:
+
+```bash
+openfusion lab recommend results.json
+```
+
+- Export a shareable result card:
+
+```bash
+openfusion lab export results.json --out result-card.json
+```
+
+The result card reports accuracy, calls, latency percentiles, token totals, efficiency, baseline comparison, warnings, and transparent recommendations. Recommendations apply only to the dataset, model set, hardware, and call budget used for that run. See [docs/LAB.md](docs/LAB.md).
+
+---
+
 ## Evaluation
 
 Do not assume that more agents always improve a task. Measure quality, latency, and cost on a dataset representative of your use case.
@@ -615,7 +659,7 @@ See [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTU
 
 ## Research positioning
 
-OpenFusion v0.4.0 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, Self-MoA, multi-agent debate, OpenRouter Fusion, routing/cascade research, and Sakana-style orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging.
+OpenFusion v0.5.0 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, Self-MoA, multi-agent debate, OpenRouter Fusion, routing/cascade research, and Sakana-style orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging.
 
 OpenFusion is useful for studying questions such as:
 
@@ -634,8 +678,9 @@ See [docs/RESEARCH.md](docs/RESEARCH.md), [docs/MOA.md](docs/MOA.md), and [docs/
 - `panel_judge` still works but is normalized to `parallel_synthesis` in response metadata.
 - Earlier valid configs should continue to load because new config fields have defaults.
 - `/health` includes version and strategy names.
-- `/v1/models` lists the expanded v0.4 strategy model IDs.
+- `/v1/models` lists the available strategy model IDs.
 - Provider timeout errors are explicit.
+- v0.5 adds OpenFusion Lab experiment files, generated runtime configs, result cards, model search, and manual engine guidance.
 - v0.4 adds Self-MoA, sequential Self-MoA, pairwise ranking, semantic voting, uncertainty cascade, role-diverse prompts, structured synthesis, and equal-budget evaluation.
 
 See [docs/MIGRATION_V2.md](docs/MIGRATION_V2.md) for earlier migration details.

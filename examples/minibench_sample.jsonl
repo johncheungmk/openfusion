@@ -1,0 +1,4 @@
+{"id":"mmlu-mini-001","subject":"computer_science","messages":[{"role":"user","content":"Answer only A, B, C, or D. Which data structure uses FIFO order? A) Stack B) Queue C) Tree D) Hash map"}],"answer":"B","answer_regex":"\\b([ABCD])\\b"}
+{"id":"mmlu-mini-002","subject":"math","messages":[{"role":"user","content":"Answer only A, B, C, or D. What is 3 * 4? A) 7 B) 9 C) 12 D) 14"}],"answer":"C","answer_regex":"\\b([ABCD])\\b"}
+{"id":"math-001","prompt":"Return only the answer: 2 + 2","reference":"4"}
+{"id":"science-001","prompt":"Return only the answer: Water freezes at 0 degrees on which temperature scale?","reference":"celsius","answer_regex":"(?i)\\b(celsius)\\b"}

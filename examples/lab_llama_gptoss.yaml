@@ -1,0 +1,54 @@
+experiment:
+  name: llama-gptoss-fusion-test
+  description: Compare direct and fusion strategies on a small MMLU-style subset.
+  seed: 42
+  max_examples: 200
+  max_total_calls: 6
+  max_tokens: 64
+  temperature: 0.2
+
+dataset:
+  path: examples/minibench_sample.jsonl
+  name: openfusion-minibench
+  split: smoke
+  answer_mode: exact_or_regex
+
+engines:
+  - name: ollama-default
+    type: ollama
+    base_url: http://127.0.0.1:11434/v1
+    launch: manual
+
+  - name: ollama-second
+    type: ollama
+    base_url: http://127.0.0.1:11435/v1
+    launch: manual
+
+models:
+  - provider_name: ollama-llama
+    engine: ollama-default
+    model: llama3.2:3b
+    weight: 1.0
+    timeout_seconds: 300
+
+  - provider_name: ollama-gptoss
+    engine: ollama-second
+    model: gpt-oss:latest
+    weight: 1.2
+    timeout_seconds: 600
+
+strategies:
+  - name: fallback
+  - name: self_moa
+    self_moa_provider: ollama-gptoss
+    self_moa_samples: 3
+    self_moa_mode: synthesize
+  - name: semantic_vote
+  - name: parallel_synthesis
+  - name: pairwise_rank_fuse
+  - name: uncertainty_cascade
+
+recommendation:
+  objective: balanced
+  max_latency_ms: 120000
+  prefer_lower_calls: true

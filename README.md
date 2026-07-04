@@ -4,7 +4,7 @@
 
 # OpenFusion
 
-**OpenFusion v0.5.0** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows. It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique-revision, execute bounded multi-layer refinement, and run local OpenFusion Lab experiments.
+**OpenFusion v0.5.2** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows. It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique-revision, execute bounded multi-layer refinement, and run local OpenFusion Lab experiments.
 
 Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
 
@@ -14,10 +14,10 @@ OpenFusion is **not** the original Together AI Mixture-of-Agents implementation,
 
 ---
 
-## Highlights in v0.5.0
+## Highlights in v0.5.2
 
 - OpenFusion Lab for local model-fusion experiments.
-- `lab.yaml` validation, generated runtime config, result-card export, recommendations, model search, and engine launch guidance.
+- `lab.yaml` validation, generated runtime config, direct per-provider baselines, best-single-model comparisons, result-card export, recommendations, model search, and engine launch guidance.
 - First-class `self_moa` and `self_moa_seq` strategies.
 - Role-diverse panel prompts and optional structured synthesis analysis.
 - `pairwise_rank_fuse` for rank-then-fuse workflows.
@@ -573,7 +573,21 @@ openfusion lab recommend results.json
 openfusion lab export results.json --out result-card.json
 ```
 
-The result card reports accuracy, calls, latency percentiles, token totals, efficiency, baseline comparison, warnings, and transparent recommendations. Recommendations apply only to the dataset, model set, hardware, and call budget used for that run. See [docs/LAB.md](docs/LAB.md).
+The result card reports direct per-provider baselines, the best single-model baseline, strategy deltas versus fallback and best single model, calls, latency percentiles, token totals, efficiency, warnings, and objective-specific recommendations. Recommendations apply only to the dataset, model set, hardware, and call budget used for that run. See [docs/LAB.md](docs/LAB.md) and [docs/COOKBOOK.md](docs/COOKBOOK.md).
+
+### Recommended Testing Methodology
+
+Use this structure for Lab experiments:
+
+1. Single-model baselines: model A alone, model B alone, and the best single model.
+2. Same-model test-time compute: `self_moa` with the best model, or `self_moa_seq` when many samples are used.
+3. Mixed-model fusion: `semantic_vote` for short exact-answer tasks, `parallel_synthesis` for open-ended tasks, and `pairwise_rank_fuse` for candidate ranking plus synthesis.
+4. Cascade: `uncertainty_cascade` for cost- or latency-sensitive use.
+5. Equal-budget comparison: compare N calls of the best single model with N calls of mixed fusion.
+6. Metrics: accuracy or win rate, latency p50/p95, total calls, tokens, accuracy per call, accuracy per 1k tokens, delta versus fallback, and delta versus the best single model.
+7. Negative results: if fusion does not help, say so.
+
+OpenRouter Fusion compared solo models, self-fusion, mixed panels, and budget panels. OpenFusion users should reproduce that evaluation structure for their own models and tasks, not claim the same scores.
 
 ---
 

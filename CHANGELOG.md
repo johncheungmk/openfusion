@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2
+
+- Added direct per-provider baseline reporting in OpenFusion Lab.
+- Added best single-model baseline comparison.
+- Added percentage-point and relative improvement metrics.
+- Improved Lab recommendation wording by objective.
+- Fixed Windows UTF-8 BOM JSONL loading.
+- Added OpenFusion Lab cookbook with PowerShell and Linux/macOS examples.
+- Added baseline-vs-fusion testing methodology documentation.
+
 ## 0.5.1
 
 - Fixed Python package metadata version mismatch in pyproject.toml.

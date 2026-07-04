@@ -1,0 +1,48 @@
+experiment:
+  name: local-small-baseline-comparison
+  description: Compare two local Ollama models against fallback and fusion strategies.
+  seed: 42
+  max_examples: 10
+  max_total_calls: 6
+  max_tokens: 96
+  temperature: 0.0
+
+dataset:
+  path: examples/minibench_local_10.jsonl
+  name: openfusion-local-minibench-10
+  split: smoke
+  answer_mode: exact_or_regex
+
+engines:
+  - name: ollama-local
+    type: ollama
+    base_url: http://127.0.0.1:11434/v1
+    launch: manual
+
+models:
+  - provider_name: ollama-llama32-3b
+    engine: ollama-local
+    model: llama3.2:3b
+    weight: 1.0
+    timeout_seconds: 300
+
+  - provider_name: ollama-qwen3
+    engine: ollama-local
+    model: qwen3:latest
+    weight: 1.0
+    timeout_seconds: 300
+
+strategies:
+  - name: fallback
+  - name: self_moa
+    self_moa_provider: ollama-qwen3
+    self_moa_samples: 3
+    self_moa_mode: synthesize
+  - name: semantic_vote
+  - name: parallel_synthesis
+  - name: uncertainty_cascade
+
+recommendation:
+  objective: balanced
+  max_latency_ms: 120000
+  prefer_lower_calls: true

@@ -1,0 +1,10 @@
+{"id":"local-mcq-001","subject":"computer_science","messages":[{"role":"user","content":"Answer only A, B, C, or D. Which data structure uses FIFO order? A) Stack B) Queue C) Tree D) Hash map"}],"answer":"B","answer_regex":"\\b([ABCD])\\b"}
+{"id":"local-mcq-002","subject":"math","messages":[{"role":"user","content":"Answer only A, B, C, or D. What is 3 * 4? A) 7 B) 9 C) 12 D) 14"}],"answer":"C","answer_regex":"\\b([ABCD])\\b"}
+{"id":"local-mcq-003","subject":"science","messages":[{"role":"user","content":"Answer only A, B, C, or D. Water freezes at 0 degrees on which scale? A) Kelvin B) Celsius C) Fahrenheit D) Rankine"}],"answer":"B","answer_regex":"\\b([ABCD])\\b"}
+{"id":"local-mcq-004","subject":"history","messages":[{"role":"user","content":"Answer only A, B, C, or D. The Declaration of Independence was adopted in which year? A) 1492 B) 1776 C) 1865 D) 1914"}],"answer":"B","answer_regex":"\\b([ABCD])\\b"}
+{"id":"local-mcq-005","subject":"math","messages":[{"role":"user","content":"Answer only A, B, C, or D. What is 15 - 6? A) 7 B) 8 C) 9 D) 10"}],"answer":"C","answer_regex":"\\b([ABCD])\\b"}
+{"id":"local-short-006","prompt":"Return only the answer: 2 + 2","reference":"4","answer_regex":"\\b4\\b"}
+{"id":"local-short-007","prompt":"Return only the answer: the chemical symbol for water","reference":"H2O","answer_regex":"(?i)\\bH\\s*2\\s*O\\b"}
+{"id":"local-short-008","prompt":"Return only the answer: opposite of hot","reference":"cold","answer_regex":"(?i)\\bcold\\b"}
+{"id":"local-short-009","prompt":"Return only the answer: primary gas plants absorb from air","reference":"carbon dioxide","answer_regex":"(?i)\\bcarbon dioxide\\b|\\bCO2\\b"}
+{"id":"local-short-010","prompt":"Return only the answer: largest planet in the Solar System","reference":"Jupiter","answer_regex":"(?i)\\bjupiter\\b"}

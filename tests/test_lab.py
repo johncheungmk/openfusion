@@ -11,11 +11,13 @@ from openfusion.cli import app
 from openfusion.config import AppConfig
 from openfusion.lab import (
     LAB_RESULT_SCHEMA_VERSION,
+    BaselineResultSummary,
     LabConfig,
     LabExampleResult,
     LabMetricSummary,
     LabRecommendationSettings,
     StrategyResultSummary,
+    _strategy_comparisons,
     _metrics,
     build_engine_plan,
     lab_config_to_app_config,
@@ -100,6 +102,16 @@ def test_loading_prompt_style_dataset(tmp_path: Path) -> None:
     assert examples[0].references == ["4"]
 
 
+def test_loading_utf8_bom_dataset(tmp_path: Path) -> None:
+    dataset = tmp_path / "bom.jsonl"
+    dataset.write_text('\ufeff{"id":"math","prompt":"2+2?","reference":"4"}\n', encoding="utf-8")
+
+    examples = load_lab_dataset(dataset)
+
+    assert examples[0].id == "math"
+    assert examples[0].references == ["4"]
+
+
 def test_loading_chat_style_dataset(tmp_path: Path) -> None:
     dataset = tmp_path / "data.jsonl"
     dataset.write_text(
@@ -132,7 +144,17 @@ async def test_lab_run_with_fake_providers_metrics_and_result_card(tmp_path: Pat
 
     fallback = next(summary for summary in card.strategies if summary.strategy == "fallback")
     majority = next(summary for summary in card.strategies if summary.strategy == "majority_vote")
+    baseline_a = next(summary for summary in card.baselines if summary.name == "baseline/local-a")
     assert card.schema_version == LAB_RESULT_SCHEMA_VERSION
+    assert [baseline.name for baseline in card.baselines] == ["baseline/local-a", "baseline/local-b"]
+    assert baseline_a.provider == "local-a"
+    assert baseline_a.model == "llama3.2:3b"
+    assert baseline_a.metrics.correct == 3
+    assert card.first_provider_baseline == baseline_a
+    assert card.fallback_baseline == fallback
+    assert card.best_single_model_by_accuracy in card.baselines
+    assert card.best_single_model_by_latency == baseline_a
+    assert card.best_single_model_baseline == card.best_single_model_by_accuracy
     assert fallback.metrics.total_examples == 3
     assert fallback.metrics.correct == 3
     assert fallback.metrics.total_calls == 3
@@ -146,12 +168,51 @@ async def test_lab_run_with_fake_providers_metrics_and_result_card(tmp_path: Pat
     assert fallback.metrics.accuracy_per_1k_tokens == pytest.approx(1000 / 15)
     assert majority.metrics.total_calls > fallback.metrics.total_calls
     assert majority.metrics.avg_calls_per_example <= config.experiment.max_total_calls
+    assert {comparison.strategy for comparison in card.strategy_comparisons} == {
+        "fallback",
+        "majority_vote",
+    }
+    majority_comparison = next(
+        comparison for comparison in card.strategy_comparisons if comparison.strategy == "majority_vote"
+    )
+    assert majority_comparison.accuracy_delta_vs_fallback_pp == pytest.approx(0.0)
+    assert majority_comparison.latency_ratio_vs_best_single is not None
+    assert majority_comparison.calls_ratio_vs_best_single is not None
+    assert majority_comparison.tokens_ratio_vs_best_single is not None
     assert card.recommendations.best_accuracy in {"fallback", "majority_vote"}
     assert card.recommendations.best_latency == "fallback"
     assert card.recommendations.best_efficiency == "fallback"
     assert card.recommendations.best_balanced == "fallback"
+    assert card.recommendations.by_objective["best_accuracy"] in {"fallback", "majority_vote"}
+    assert card.recommendations.explanations_by_objective["best_accuracy"]
     assert card.dataset_hash
     assert card.config_hash
+
+
+@pytest.mark.asyncio
+async def test_lab_best_single_baseline_selection_by_accuracy_and_latency(tmp_path: Path) -> None:
+    config = LabConfig.load(_write_lab_yaml(tmp_path))
+    app_config = lab_config_to_app_config(config)
+    providers = {}
+    for provider in app_config.providers:
+        answers = (
+            {"2+2": "4", "FIFO": "wrong", "3 * 4": "wrong"}
+            if provider.name == "local-a"
+            else {"2+2": "4", "FIFO": "B", "3 * 4": "C"}
+        )
+        providers[provider.name] = LabFakeProvider(
+            provider,
+            answers=answers,
+            latency_ms=5 if provider.name == "local-a" else 25,
+        )
+
+    card = await run_lab_experiment(config, lab_path=tmp_path / "lab.yaml", providers=providers)
+
+    assert card.best_single_model_by_accuracy
+    assert card.best_single_model_by_accuracy.name == "baseline/local-b"
+    assert card.best_single_model_by_accuracy.metrics.accuracy == pytest.approx(1.0)
+    assert card.best_single_model_by_latency
+    assert card.best_single_model_by_latency.name == "baseline/local-a"
 
 
 def test_p50_p95_latency_calculation() -> None:
@@ -202,7 +263,97 @@ def test_warning_when_fusion_does_not_beat_fallback() -> None:
     )
 
     assert "Fusion did not beat the fallback baseline on accuracy." in recommendation.warnings
-    assert any("semantic_vote is not recommended" in item for item in recommendation.explanations)
+    assert not any("semantic_vote is not recommended" in item for item in recommendation.explanations)
+
+
+def test_strategy_comparison_delta_relative_ratio_and_divide_by_zero() -> None:
+    fallback = _summary("fallback", accuracy=0.5, latency=10, calls=4, tokens=40)
+    fusion = _summary("parallel_synthesis", accuracy=0.75, latency=25, calls=8, tokens=100)
+    best_single = BaselineResultSummary(
+        name="baseline/local-b",
+        provider="local-b",
+        model="qwen3:latest",
+        metrics=LabMetricSummary(
+            total_examples=4,
+            correct=4,
+            accuracy=1.0,
+            total_calls=4,
+            avg_calls_per_example=1.0,
+            total_latency_ms=80,
+            avg_latency_ms=20,
+            total_tokens=50,
+            accuracy_per_call=0.25,
+            accuracy_per_1k_tokens=20,
+        ),
+    )
+
+    comparisons = _strategy_comparisons(
+        [fallback, fusion],
+        fallback_baseline=fallback,
+        best_single_model=best_single,
+        settings=LabRecommendationSettings(),
+    )
+    fusion_comparison = next(item for item in comparisons if item.strategy == "parallel_synthesis")
+
+    assert fusion_comparison.accuracy_delta_vs_fallback_pp == pytest.approx(25.0)
+    assert fusion_comparison.accuracy_delta_vs_best_single_pp == pytest.approx(-25.0)
+    assert fusion_comparison.accuracy_relative_vs_fallback_percent == pytest.approx(50.0)
+    assert fusion_comparison.accuracy_relative_vs_best_single_percent == pytest.approx(-25.0)
+    assert fusion_comparison.latency_ratio_vs_fallback == pytest.approx(2.5)
+    assert fusion_comparison.latency_ratio_vs_best_single == pytest.approx(1.25)
+    assert fusion_comparison.calls_ratio_vs_fallback == pytest.approx(2.0)
+    assert fusion_comparison.calls_ratio_vs_best_single == pytest.approx(2.0)
+    assert fusion_comparison.tokens_ratio_vs_fallback == pytest.approx(2.5)
+    assert fusion_comparison.tokens_ratio_vs_best_single == pytest.approx(2.0)
+
+    zero_fallback = _summary("fallback", accuracy=0.0, latency=0, calls=0, tokens=0)
+    zero_comparison = _strategy_comparisons(
+        [zero_fallback, fusion],
+        fallback_baseline=zero_fallback,
+        best_single_model=BaselineResultSummary(
+            name="baseline/zero",
+            provider="zero",
+            model="zero",
+            metrics=zero_fallback.metrics,
+        ),
+        settings=LabRecommendationSettings(),
+    )[1]
+
+    assert zero_comparison.accuracy_relative_vs_fallback_percent is None
+    assert zero_comparison.latency_ratio_vs_fallback is None
+    assert zero_comparison.calls_ratio_vs_fallback is None
+    assert zero_comparison.tokens_ratio_vs_fallback is None
+
+
+def test_recommendation_wording_is_objective_specific() -> None:
+    fallback = _summary("fallback", accuracy=1.0, latency=20, calls=4)
+    cascade = _summary("uncertainty_cascade", accuracy=0.75, latency=5, calls=4)
+    best_single = BaselineResultSummary(
+        name="baseline/local-a",
+        provider="local-a",
+        model="llama3.2:3b",
+        metrics=fallback.metrics,
+    )
+
+    recommendation = recommend_from_summaries(
+        [fallback, cascade],
+        baseline_strategy="fallback",
+        settings=LabRecommendationSettings(),
+        baselines=[best_single],
+        fallback_baseline=fallback,
+        best_single_model=best_single,
+    )
+
+    assert recommendation.best_latency == "uncertainty_cascade"
+    assert any(
+        "uncertainty_cascade" in item and "not for accuracy improvement" in item
+        for item in recommendation.explanations_by_objective["best_latency"]
+    )
+    assert "Fusion is not recommended for accuracy on this dataset." in recommendation.warnings
+    assert not any(
+        "uncertainty_cascade is not recommended" in item
+        for item in recommendation.explanations
+    )
 
 
 @pytest.mark.asyncio
@@ -282,12 +433,48 @@ def test_lab_cli_engine_plan(tmp_path: Path) -> None:
     assert "ollama pull llama3.2:3b" in result.output
 
 
+@pytest.mark.asyncio
+async def test_lab_cli_recommend_prints_baseline_and_strategy_tables(tmp_path: Path) -> None:
+    config = LabConfig.load(_write_lab_yaml(tmp_path))
+    app_config = lab_config_to_app_config(config)
+    providers = {
+        provider.name: LabFakeProvider(
+            provider,
+            answers={"2+2": "4", "FIFO": "B", "3 * 4": "C"},
+            latency_ms=10 if provider.name == "local-a" else 20,
+        )
+        for provider in app_config.providers
+    }
+    card = await run_lab_experiment(config, lab_path=tmp_path / "lab.yaml", providers=providers)
+    results_path = tmp_path / "results.json"
+    results_path.write_text(card.model_dump_json(indent=2), encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["lab", "recommend", str(results_path)])
+
+    assert result.exit_code == 0
+    assert "Single-model baselines" in result.output
+    assert "Strategy comparison" in result.output
+    assert "best_accuracy" in result.output
+    assert "baseline" in result.output
+
+
+def test_docs_examples_load_successfully() -> None:
+    for path in (
+        Path("examples/minibench_local_10.jsonl"),
+        Path("examples/open_ended_synthesis_10.jsonl"),
+    ):
+        examples = load_lab_dataset(path)
+        assert len(examples) == 10
+        assert all(example.id for example in examples)
+
+
 def _summary(
     strategy: str,
     *,
     accuracy: float,
     latency: int,
     calls: int,
+    tokens: int = 40,
     failures: int = 0,
 ) -> StrategyResultSummary:
     return StrategyResultSummary(
@@ -300,9 +487,9 @@ def _summary(
             avg_calls_per_example=calls / 4,
             total_latency_ms=latency * 4,
             avg_latency_ms=latency,
-            total_tokens=40,
-            accuracy_per_call=accuracy / calls,
-            accuracy_per_1k_tokens=accuracy / 0.04,
+            total_tokens=tokens,
+            accuracy_per_call=accuracy / calls if calls else 0.0,
+            accuracy_per_1k_tokens=accuracy / (tokens / 1000) if tokens else 0.0,
             failures=failures,
         ),
     )

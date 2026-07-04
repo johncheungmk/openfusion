@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Added OpenFusion Lab for local model-fusion experiments.
+- Added lab.yaml schema and validation.
+- Added generated OpenFusion config from lab definitions.
+- Added local result-card JSON format.
+- Added strategy comparison reports and recommendations.
+- Added Hugging Face model search helper.
+- Added engine launch guidance for Ollama, vLLM, and TGI.
+- Added MiniBench sample dataset.
+
 ## 0.4.0
 
 - Added first-class `self_moa` and `self_moa_seq` strategies.

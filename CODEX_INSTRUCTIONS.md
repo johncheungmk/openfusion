@@ -1,4 +1,4 @@
-# Codex maintenance instructions for OpenFusion v0.2
+# Codex maintenance instructions for OpenFusion
 
 ## Project identity
 

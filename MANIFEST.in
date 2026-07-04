@@ -9,4 +9,4 @@ include config.example.yaml
 include .env.example
 recursive-include assets *.svg
 recursive-include docs *.md
-recursive-include examples *.py *.sh *.ps1 *.jsonl
+recursive-include examples *.py *.sh *.ps1 *.jsonl *.yaml

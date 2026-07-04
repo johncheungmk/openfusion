@@ -24,7 +24,7 @@ def test_health_and_models() -> None:
     health_payload = health.json()
     assert health_payload["ok"] is True
     assert health_payload["providers"] == ["local"]
-    assert health_payload["version"] == "0.4.0"
+    assert health_payload["version"] == "0.5.0"
     assert "adaptive" in health_payload["strategies"]
 
     models = client.get("/v1/models")

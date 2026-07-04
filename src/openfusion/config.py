@@ -51,16 +51,22 @@ class FusionConfig(BaseModel):
     critic_provider: str | None = None
     reviser_provider: str | None = None
     planner_provider: str | None = None
+    self_moa_provider: str | None = None
 
     max_parallel: int = 4
     max_total_calls: int = 12
     samples_per_provider: int = 1
     refinement_rounds: int = 1
+    self_moa_samples: int = 3
+    self_moa_batch_size: int = 4
+    self_moa_seq_carry_max_chars: int = 12000
 
     temperature: float = 0.2
     judge_temperature: float = 0.1
     critique_temperature: float = 0.1
+    self_moa_temperature: float = 0.7
     max_tokens: int | None = 256
+    self_moa_mode: Literal["select", "synthesize"] = "synthesize"
 
     require_at_least_successes: int = 1
     include_candidate_outputs: bool = True
@@ -77,6 +83,9 @@ class FusionConfig(BaseModel):
         "max_parallel",
         "max_total_calls",
         "samples_per_provider",
+        "self_moa_samples",
+        "self_moa_batch_size",
+        "self_moa_seq_carry_max_chars",
         "require_at_least_successes",
         "judge_candidate_max_chars",
         "transcript_max_chars",
@@ -132,6 +141,7 @@ class AppConfig(BaseModel):
             "Critic": self.fusion.critic_provider,
             "Reviser": self.fusion.reviser_provider,
             "Planner": self.fusion.planner_provider,
+            "Self-MoA": self.fusion.self_moa_provider,
         }
         for role, provider_name in role_references.items():
             if provider_name and provider_name not in known_names:
@@ -184,6 +194,8 @@ def write_example_config(path: str | Path) -> None:
             "default_strategy": "parallel_synthesis",
             "panel": ["local-ollama"],
             "judge_provider": "local-ollama",
+            "self_moa_samples": 3,
+            "self_moa_mode": "synthesize",
             "max_tokens": 256,
         },
     }

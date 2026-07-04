@@ -61,6 +61,8 @@ rationale, not hidden chain-of-thought.
 SUPPORTED_STRATEGIES = (
     "fallback",
     "parallel_synthesis",
+    "self_moa",
+    "self_moa_seq",
     "best_of_n",
     "majority_vote",
     "weighted_vote",
@@ -77,6 +79,8 @@ STRATEGY_ALIASES = {
     "parallel-judge": "parallel_synthesis",
     "parallel-synthesis": "parallel_synthesis",
     "fusion": "parallel_synthesis",
+    "self-moa": "self_moa",
+    "self-moa-seq": "self_moa_seq",
     "best-of-n": "best_of_n",
     "majority-vote": "majority_vote",
     "weighted-vote": "weighted_vote",
@@ -194,10 +198,17 @@ class FusionEngine:
         refinement_rounds: int | None = None,
         max_total_calls: int | None = None,
         vote_regex: str | None = None,
+        self_moa_provider: str | None = None,
+        self_moa_samples: int | None = None,
+        self_moa_mode: str | None = None,
     ) -> FusionResult:
         selected_strategy = canonical_strategy(strategy or self.config.fusion.default_strategy)
         panel_names = self._panel_names(panel)
         samples = max(1, samples_per_provider or self.config.fusion.samples_per_provider)
+        self_samples = max(1, self_moa_samples or self.config.fusion.self_moa_samples)
+        selected_self_moa_mode = self_moa_mode or self.config.fusion.self_moa_mode
+        if selected_self_moa_mode not in {"select", "synthesize"}:
+            raise ValueError("self_moa_mode must be either 'select' or 'synthesize'")
         rounds = (
             self.config.fusion.refinement_rounds
             if refinement_rounds is None
@@ -231,6 +242,7 @@ class FusionEngine:
                 samples_per_provider=samples,
                 refinement_rounds=rounds,
                 max_total_calls=call_limit,
+                self_moa_samples=self_samples,
             )
 
         result = await self._execute(
@@ -246,6 +258,9 @@ class FusionEngine:
             samples_per_provider=plan.samples_per_provider,
             refinement_rounds=plan.refinement_rounds,
             vote_regex=vote_regex or self.config.fusion.vote_answer_regex,
+            self_moa_provider=self_moa_provider,
+            self_moa_samples=self_samples,
+            self_moa_mode=selected_self_moa_mode,
             budget=budget,
             trace=trace,
         )
@@ -332,6 +347,9 @@ class FusionEngine:
         samples_per_provider: int,
         refinement_rounds: int,
         vote_regex: str | None,
+        self_moa_provider: str | None,
+        self_moa_samples: int,
+        self_moa_mode: str,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
@@ -354,6 +372,34 @@ class FusionEngine:
                 max_tokens,
                 extra_body,
                 samples_per_provider,
+                budget,
+                trace,
+            )
+        if strategy == "self_moa":
+            return await self._self_moa(
+                messages,
+                panel,
+                self_moa_provider,
+                judge_provider,
+                temperature,
+                max_tokens,
+                extra_body,
+                self_moa_samples or samples_per_provider,
+                self_moa_mode,
+                budget,
+                trace,
+            )
+        if strategy == "self_moa_seq":
+            return await self._self_moa_seq(
+                messages,
+                panel,
+                self_moa_provider,
+                judge_provider,
+                temperature,
+                max_tokens,
+                extra_body,
+                self_moa_samples or samples_per_provider,
+                self_moa_mode,
                 budget,
                 trace,
             )
@@ -650,6 +696,226 @@ class FusionEngine:
             candidates=self._visible_candidates(candidates),
             usage=usage,
         )
+
+    async def _self_moa(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        self_moa_provider: str | None,
+        judge_provider: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        sample_count: int,
+        mode: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        selected_provider = self._self_moa_role_provider(self_moa_provider, judge_provider, panel)
+        request = self._provider_request(
+            messages,
+            temperature if temperature is not None else self.config.fusion.self_moa_temperature,
+            max_tokens,
+            extra_body,
+        )
+        candidates = await self._generate_candidates(
+            [selected_provider],
+            request,
+            sample_count,
+            budget,
+            trace,
+            stage="self_moa_sample",
+        )
+        successes = self._successes(candidates)
+        if not successes:
+            self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+            return self._no_success_result("self_moa", candidates)
+
+        final, judge_analysis, aggregator = await self._self_moa_finalize(
+            messages,
+            successes,
+            selected_provider,
+            max_tokens,
+            mode,
+            budget,
+            trace,
+            stage="self_moa_synthesis" if mode == "synthesize" else "self_moa_selection",
+        )
+        usage = self._sum_usage(candidates) + aggregator.usage
+        self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+        return FusionResult(
+            strategy="self_moa",
+            final=final,
+            judge_provider=selected_provider,
+            judge_analysis=judge_analysis,
+            candidates=self._visible_candidates(candidates),
+            usage=usage,
+        )
+
+    async def _self_moa_seq(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        self_moa_provider: str | None,
+        judge_provider: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        sample_count: int,
+        mode: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        selected_provider = self._self_moa_role_provider(self_moa_provider, judge_provider, panel)
+        request = self._provider_request(
+            messages,
+            temperature if temperature is not None else self.config.fusion.self_moa_temperature,
+            max_tokens,
+            extra_body,
+        )
+        batch_size = max(1, self.config.fusion.self_moa_batch_size)
+        all_candidates: list[CandidateResult] = []
+        aggregators: list[CandidateResult] = []
+        carry: CandidateResult | None = None
+        requested = max(1, sample_count)
+        generated = 0
+
+        while generated < requested and budget.remaining > 0:
+            current_batch_size = min(batch_size, requested - generated)
+            batch = await self._generate_candidates(
+                [selected_provider],
+                request,
+                current_batch_size,
+                budget,
+                trace,
+                stage=f"self_moa_seq_batch_{(generated // batch_size) + 1}",
+            )
+            generated += current_batch_size
+            all_candidates.extend(batch)
+            batch_successes = self._successes(batch)
+            pool = ([carry] if carry is not None and carry.content.strip() else []) + batch_successes
+            if not pool:
+                continue
+            if len(pool) == 1 or budget.remaining <= 0:
+                carry = self._carry_candidate(pool[0], selected_provider, generated)
+                continue
+
+            final, _analysis, aggregator = await self._self_moa_finalize(
+                messages,
+                pool,
+                selected_provider,
+                max_tokens,
+                mode,
+                budget,
+                trace,
+                stage=f"self_moa_seq_{mode}_{(generated + batch_size - 1) // batch_size}",
+            )
+            aggregators.append(aggregator)
+            carry_model = (
+                self.providers[selected_provider].config.model
+                if selected_provider in self.providers
+                else selected_provider
+            )
+            carry = self._carry_candidate(
+                CandidateResult(
+                    provider=selected_provider,
+                    model=carry_model,
+                    content=final,
+                    ok=bool(final.strip()),
+                    stage="self_moa_seq_carry",
+                    sample_index=generated,
+                ),
+                selected_provider,
+                generated,
+            )
+
+        successes = self._successes(all_candidates)
+        if carry is not None and carry.content.strip():
+            final = carry.content
+            analysis = (
+                f"Sequential Self-MoA carried a running {mode} answer across "
+                f"{len(successes)} usable sample(s)."
+            )
+        elif successes:
+            best = self._deterministic_best(successes)
+            final = best.content
+            analysis = "Sequential Self-MoA used deterministic fallback from usable samples."
+        else:
+            self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+            return self._no_success_result("self_moa_seq", all_candidates)
+
+        self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+        return FusionResult(
+            strategy="self_moa_seq",
+            final=final,
+            judge_provider=selected_provider,
+            judge_analysis=analysis,
+            candidates=self._visible_candidates(all_candidates),
+            usage=self._sum_usage(all_candidates) + self._sum_usage(aggregators),
+        )
+
+    async def _self_moa_finalize(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        provider_name: str,
+        max_tokens: int | None,
+        mode: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+        stage: str,
+    ) -> tuple[str, str, CandidateResult]:
+        if len(candidates) == 1:
+            return candidates[0].content, "Only one usable Self-MoA sample was available.", CandidateResult(
+                provider=provider_name,
+                model=candidates[0].model,
+                ok=False,
+                error="selection not needed",
+                stage=stage,
+            )
+        if mode == "select":
+            selector_request = ProviderRequest(
+                messages=[
+                    ChatMessage(role="system", content=SELECTOR_SYSTEM_PROMPT),
+                    ChatMessage(role="user", content=self._build_selector_prompt(messages, candidates)),
+                ],
+                temperature=0.0,
+                max_tokens=220,
+            )
+            selector = await self._call_provider(
+                provider_name,
+                selector_request,
+                asyncio.Semaphore(1),
+                budget,
+                trace,
+                stage=stage,
+                sample_index=1,
+            )
+            selection = self._parse_selection(selector.content, len(candidates)) if selector.ok else None
+            if selection is not None:
+                winner_index, reason = selection
+                return candidates[winner_index].content, reason, selector
+            winner = self._deterministic_best(candidates)
+            detail = selector.error or "selector returned invalid JSON"
+            return winner.content, f"Deterministic fallback used because {detail}.", selector
+
+        synthesis = await self._call_synthesizer(
+            messages,
+            candidates,
+            provider_name,
+            max_tokens,
+            budget,
+            trace,
+            stage=stage,
+        )
+        if synthesis.ok and synthesis.content.strip():
+            return (
+                synthesis.content,
+                f"Synthesized {len(candidates)} Self-MoA sample(s).",
+                synthesis,
+            )
+        best = self._deterministic_best(candidates)
+        return best.content, f"Synthesis failed: {synthesis.error or 'empty response'}", synthesis
 
     async def _vote(
         self,
@@ -1199,10 +1465,14 @@ class FusionEngine:
         samples_per_provider: int,
         refinement_rounds: int,
         max_total_calls: int,
+        self_moa_samples: int | None = None,
     ) -> OrchestrationPlan:
-        samples_per_provider = self._effective_samples_for_strategy(
-            strategy, panel, samples_per_provider
-        )
+        if strategy in {"self_moa", "self_moa_seq"}:
+            samples_per_provider = max(1, self_moa_samples or samples_per_provider)
+        else:
+            samples_per_provider = self._effective_samples_for_strategy(
+                strategy, panel, samples_per_provider
+            )
         return OrchestrationPlan(
             strategy=strategy,
             panel=panel,
@@ -1233,6 +1503,8 @@ class FusionEngine:
         drafts = panel_size * max(1, samples_per_provider)
         if strategy == "fallback":
             return panel_size
+        if strategy in {"self_moa", "self_moa_seq"}:
+            return max(1, samples_per_provider) + 1
         if strategy in {"parallel_synthesis", "best_of_n"}:
             return drafts + 1
         if strategy in {"majority_vote", "weighted_vote"}:
@@ -1298,6 +1570,68 @@ class FusionEngine:
         if panel:
             return panel[0]
         raise ValueError("No enabled provider is available for the requested workflow role")
+
+    def _self_moa_role_provider(
+        self,
+        requested: str | None,
+        judge_provider: str | None,
+        panel: list[str],
+    ) -> str:
+        for provider_name in (
+            requested,
+            self.config.fusion.self_moa_provider,
+            judge_provider,
+            self.config.fusion.judge_provider,
+            panel[0] if panel else None,
+        ):
+            if provider_name:
+                return provider_name
+        if self.providers:
+            return next(iter(self.providers))
+        raise ValueError("No enabled provider is available for Self-MoA")
+
+    def _append_self_moa_summary(
+        self,
+        trace: list[WorkflowStep],
+        provider_name: str,
+        sample_count: int,
+        mode: str,
+        budget: CallBudget,
+    ) -> None:
+        model = self.providers[provider_name].config.model if provider_name in self.providers else "unknown"
+        trace.append(
+            WorkflowStep(
+                stage="self_moa_summary",
+                provider=provider_name,
+                model=model,
+                status="ok",
+                note=(
+                    f"provider={provider_name}; samples={sample_count}; mode={mode}; "
+                    f"call_count={budget.used}/{budget.limit}"
+                ),
+            )
+        )
+
+    def _carry_candidate(
+        self,
+        candidate: CandidateResult,
+        provider_name: str,
+        sample_index: int,
+    ) -> CandidateResult:
+        content = self._truncate_carry(candidate.content)
+        model = self.providers[provider_name].config.model if provider_name in self.providers else candidate.model
+        return CandidateResult(
+            provider=provider_name,
+            model=model,
+            weight=candidate.weight,
+            content=content,
+            ok=bool(content.strip()),
+            error=None if content.strip() else candidate.error,
+            latency_ms=candidate.latency_ms,
+            usage=candidate.usage,
+            stage="self_moa_seq_carry",
+            sample_index=sample_index,
+        )
 
     def _sampling_messages(
         self,
@@ -1417,8 +1751,8 @@ class FusionEngine:
                     }
                 )
         schema = {
-            "strategy": "one of fallback, parallel_synthesis, best_of_n, majority_vote, "
-            "weighted_vote, critique_revision, layered_refinement",
+            "strategy": "one of fallback, parallel_synthesis, self_moa, self_moa_seq, best_of_n, "
+            "majority_vote, weighted_vote, critique_revision, layered_refinement",
             "panel": ["enabled provider names only"],
             "judge_provider": "enabled provider name or null",
             "critic_provider": "enabled provider name or null",
@@ -1465,6 +1799,14 @@ class FusionEngine:
             return content
         omitted = len(content) - limit
         return f"{content[:limit]}\n[truncated {omitted} characters before orchestration]"
+
+    def _truncate_carry(self, content: str) -> str:
+        limit = max(200, self.config.fusion.self_moa_seq_carry_max_chars)
+        if len(content) <= limit:
+            return content
+        marker = f"\n[omitted {len(content) - limit} middle characters before carry-forward]\n"
+        keep = max(1, (limit - len(marker)) // 2)
+        return f"{content[:keep]}{marker}{content[-keep:]}"
 
     @staticmethod
     def _parse_selection(content: str, candidate_count: int) -> tuple[int, str] | None:

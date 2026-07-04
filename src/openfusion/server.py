@@ -23,6 +23,8 @@ STRATEGY_MODEL_IDS = (
     "openfusion/adaptive",
     "openfusion/parallel-synthesis",
     "openfusion/panel-judge",  # backward-compatible alias
+    "openfusion/self-moa",
+    "openfusion/self-moa-seq",
     "openfusion/critique-revision",
     "openfusion/layered-refinement",
     "openfusion/best-of-n",
@@ -126,6 +128,9 @@ def create_app(config: AppConfig, providers: dict[str, ModelProvider] | None = N
             refinement_rounds=request.fusion_refinement_rounds,
             max_total_calls=request.fusion_max_total_calls,
             vote_regex=request.fusion_vote_regex,
+            self_moa_provider=request.fusion_self_moa_provider,
+            self_moa_samples=request.fusion_self_moa_samples,
+            self_moa_mode=request.fusion_self_moa_mode,
         )
 
     async def _run_direct_provider(request: OpenAIChatCompletionRequest) -> FusionResult:

@@ -1,4 +1,4 @@
-# OpenFusion v0.2 configuration.
+# OpenFusion v0.4 configuration.
 # After `openfusion init --path openfusion.yaml`, edit openfusion.yaml (not this template)
 # and make each model name match the model server you actually use.
 providers:
@@ -45,8 +45,9 @@ providers:
       X-Title: OpenFusion
 
 fusion:
-  # Supported: fallback, parallel_synthesis, best_of_n, majority_vote,
-  # weighted_vote, critique_revision, layered_refinement, adaptive.
+  # Supported: fallback, parallel_synthesis, self_moa, self_moa_seq,
+  # best_of_n, majority_vote, weighted_vote, critique_revision,
+  # layered_refinement, adaptive.
   default_strategy: parallel_synthesis
   panel: [local-ollama]
 
@@ -55,15 +56,21 @@ fusion:
   critic_provider: local-ollama
   reviser_provider: local-ollama
   planner_provider:
+  self_moa_provider:
 
   max_parallel: 2
   max_total_calls: 8
   samples_per_provider: 1
   refinement_rounds: 1
+  self_moa_samples: 3
+  self_moa_batch_size: 4
+  self_moa_seq_carry_max_chars: 12000
 
   temperature: 0.2
   judge_temperature: 0.1
   critique_temperature: 0.1
+  self_moa_temperature: 0.7
+  self_moa_mode: synthesize
   max_tokens: 256
 
   require_at_least_successes: 1

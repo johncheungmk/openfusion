@@ -17,7 +17,7 @@ Self-consistency samples multiple reasoning paths and chooses a consistent answe
 
 - https://openreview.net/forum?id=1PL1NIMMrw
 
-OpenFusion implements textual `majority_vote` and `weighted_vote`. These are transparent baselines and work best for concise or regex-extractable outputs.
+OpenFusion implements textual `majority_vote` and `weighted_vote`. These are transparent baselines and work best for concise or regex-extractable outputs. OpenFusion v0.4 also adds `self_moa`, which samples one provider multiple times and then selects the best sample or synthesizes a new final answer.
 
 ## Ranking and generative fusion
 
@@ -34,6 +34,8 @@ Mixture-of-Agents presents previous-layer outputs to later agents for iterative 
 - https://arxiv.org/abs/2406.04692
 
 OpenFusion's `layered_refinement` implements a configurable, bounded version of this pattern.
+
+OpenFusion's `self_moa_seq` is a sequential, single-provider variant for larger sample counts or long candidates. It batches candidates and carries forward a running selected or fused answer instead of presenting every candidate to one final prompt.
 
 Research also warns that mixing lower-quality models can reduce performance, so provider diversity should be evaluated rather than assumed beneficial:
 

@@ -4,14 +4,15 @@
 
 # OpenFusion
 
-**OpenFusion v0.2** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows.
+**OpenFusion v0.4** is an open-source, OpenAI-compatible runtime for combining local and cloud language models through transparent inference-time workflows.
 
 It supports simple routing, but its main purpose is broader: generate independent solutions, vote or rank them, synthesize complementary evidence, run critique–revision, and execute bounded multi-layer refinement. Providers may be Ollama, LM Studio, vLLM, llama.cpp server, LiteLLM, OpenAI, OpenRouter, or any service exposing an OpenAI-compatible `/v1/chat/completions` endpoint.
 
-OpenFusion is **not** weight-level model merging, and v0.2 is **not** a trained reinforcement-learning orchestrator equivalent to Sakana Fugu. It is a readable, configurable foundation for experimenting with multi-model test-time computation.
+OpenFusion is **not** weight-level model merging, and v0.4 is **not** a trained reinforcement-learning orchestrator equivalent to Sakana Fugu. It is a readable, configurable foundation for experimenting with multi-model test-time computation.
 
-## What v0.2 adds
+## What v0.4 adds
 
+- First-class Self-MoA strategies using repeated samples from one provider.
 - Independent best-of-N sampling and selection.
 - Majority and provider-weighted consensus voting.
 - Generative parallel synthesis; legacy `panel_judge` remains an alias.
@@ -322,6 +323,8 @@ Available model IDs include:
 openfusion/adaptive
 openfusion/parallel-synthesis
 openfusion/panel-judge            # legacy alias
+openfusion/self-moa
+openfusion/self-moa-seq
 openfusion/critique-revision
 openfusion/layered-refinement
 openfusion/best-of-n
@@ -343,6 +346,31 @@ openfusion plan "Review three RAG architectures and recommend one." \
 ```
 
 To use a model-generated JSON plan, configure `planner_provider`, set `adaptive_use_model_planner: true`, or pass `--model-planner`. This consumes one call before workflow execution. Invalid plans fall back to heuristics.
+
+## Self-MoA
+
+`openfusion/self-moa` samples one provider multiple times, then either selects the best
+unchanged sample or synthesizes a new answer. Configure `fusion.self_moa_provider`,
+`fusion.self_moa_samples`, `fusion.self_moa_temperature`, and `fusion.self_moa_mode`.
+If the provider is unset, OpenFusion uses `judge_provider`, then the first panel provider.
+
+`openfusion/self-moa-seq` batches the samples and carries forward a running best or
+fused answer for long candidate sets. Tune `fusion.self_moa_batch_size` and
+`fusion.self_moa_seq_carry_max_chars` for large jobs. Both strategies obey
+`max_total_calls` and expose public trace metadata without hidden chain-of-thought.
+
+Request overrides:
+
+```json
+{
+  "model": "openfusion/self-moa",
+  "messages": [{"role": "user", "content": "Solve this carefully."}],
+  "fusion_self_moa_provider": "local-ollama",
+  "fusion_self_moa_samples": 4,
+  "fusion_self_moa_mode": "synthesize",
+  "fusion_max_total_calls": 5
+}
+```
 
 ## Python OpenAI SDK
 
@@ -416,7 +444,7 @@ See [docs/SECURITY.md](docs/SECURITY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTU
 
 ## Research positioning
 
-OpenFusion v0.2 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, multi-agent debate, OpenRouter Fusion, and Sakana's orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging. See [docs/RESEARCH.md](docs/RESEARCH.md).
+OpenFusion v0.4 is inspired by self-consistency, LLM-Blender, Mixture-of-Agents, multi-agent debate, OpenRouter Fusion, and Sakana's orchestration research. It implements practical inference workflows, not proprietary training methods or weight merging. See [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## Migration from v0.1
 

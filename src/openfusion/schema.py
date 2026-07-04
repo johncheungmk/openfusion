@@ -127,6 +127,9 @@ class OpenAIChatCompletionRequest(BaseModel):
     fusion_refinement_rounds: int | None = None
     fusion_max_total_calls: int | None = None
     fusion_vote_regex: str | None = None
+    fusion_self_moa_provider: str | None = None
+    fusion_self_moa_samples: int | None = None
+    fusion_self_moa_mode: Literal["select", "synthesize"] | None = None
 
     def effective_max_tokens(self) -> int | None:
         if self.max_completion_tokens is not None:

@@ -56,6 +56,136 @@ async def test_best_of_n_selects_candidate_without_rewriting() -> None:
 
 
 @pytest.mark.asyncio
+async def test_self_moa_select_mode_uses_one_provider_and_selects_candidate() -> None:
+    proposer = QueueProvider(
+        provider_config("self"),
+        ["Short draft.", "Longer correct draft.", '{"winner": 2, "reason": "more complete"}'],
+    )
+    config = AppConfig(
+        providers=[provider_config("self")],
+        fusion=FusionConfig(
+            panel=["self"],
+            self_moa_provider="self",
+            self_moa_samples=2,
+            self_moa_mode="select",
+        ),
+    )
+
+    result = await FusionEngine(config, providers={"self": proposer}).run(
+        [ChatMessage(role="user", content="Answer carefully")],
+        strategy="self_moa",
+    )
+
+    assert result.final == "Longer correct draft."
+    assert result.strategy == "self_moa"
+    assert result.judge_provider == "self"
+    assert result.judge_analysis == "more complete"
+    assert [request.temperature for request in proposer.requests[:2]] == [0.7, 0.7]
+    assert [step.stage for step in result.trace] == [
+        "self_moa_sample",
+        "self_moa_sample",
+        "self_moa_selection",
+        "self_moa_summary",
+    ]
+    assert "samples=2" in (result.trace[-1].note or "")
+    assert "mode=select" in (result.trace[-1].note or "")
+
+
+@pytest.mark.asyncio
+async def test_self_moa_synthesize_mode_writes_new_final() -> None:
+    proposer = QueueProvider(provider_config("self"), ["Draft A.", "Draft B.", "Fused final."])
+    config = AppConfig(
+        providers=[provider_config("self")],
+        fusion=FusionConfig(
+            panel=["self"],
+            self_moa_provider="self",
+            self_moa_samples=2,
+            self_moa_mode="synthesize",
+        ),
+    )
+
+    result = await FusionEngine(config, providers={"self": proposer}).run(
+        [ChatMessage(role="user", content="Fuse these ideas")],
+        strategy="self_moa",
+    )
+
+    assert result.final == "Fused final."
+    assert result.judge_analysis == "Synthesized 2 Self-MoA sample(s)."
+    assert result.trace[-2].stage == "self_moa_synthesis"
+
+
+@pytest.mark.asyncio
+async def test_self_moa_respects_max_total_calls() -> None:
+    proposer = QueueProvider(provider_config("self"), ["A", "Longer B", "Should not be called"])
+    config = AppConfig(
+        providers=[provider_config("self")],
+        fusion=FusionConfig(
+            panel=["self"],
+            self_moa_provider="self",
+            self_moa_samples=3,
+            max_total_calls=2,
+        ),
+    )
+
+    result = await FusionEngine(config, providers={"self": proposer}).run(
+        [ChatMessage(role="user", content="Budget test")],
+        strategy="self_moa",
+        max_total_calls=2,
+    )
+
+    assert result.final == "Longer B"
+    assert len(proposer.requests) == 2
+    assert result.trace[-2].status == "skipped"
+    assert "call_count=2/2" in (result.trace[-1].note or "")
+
+
+@pytest.mark.asyncio
+async def test_self_moa_uses_judge_then_panel_provider_default() -> None:
+    judge = QueueProvider(provider_config("judge"), ["Judge sample."])
+    panel = QueueProvider(provider_config("panel"), ["Panel sample."])
+    config = AppConfig(
+        providers=[provider_config("panel"), provider_config("judge")],
+        fusion=FusionConfig(panel=["panel"], judge_provider="judge", self_moa_samples=1),
+    )
+
+    result = await FusionEngine(
+        config,
+        providers={"panel": panel, "judge": judge},
+    ).run([ChatMessage(role="user", content="Default provider")], strategy="self_moa")
+
+    assert result.final == "Judge sample."
+    assert result.candidates[0].provider == "judge"
+    assert len(judge.requests) == 1
+    assert panel.requests == []
+
+
+@pytest.mark.asyncio
+async def test_self_moa_seq_respects_max_total_calls() -> None:
+    proposer = QueueProvider(provider_config("self"), ["A", "B", "Running fused answer."])
+    config = AppConfig(
+        providers=[provider_config("self")],
+        fusion=FusionConfig(
+            panel=["self"],
+            self_moa_provider="self",
+            self_moa_samples=5,
+            self_moa_batch_size=2,
+            max_total_calls=3,
+        ),
+    )
+
+    result = await FusionEngine(config, providers={"self": proposer}).run(
+        [ChatMessage(role="user", content="Sequential budget test")],
+        strategy="self_moa_seq",
+        max_total_calls=3,
+    )
+
+    assert result.final == "Running fused answer."
+    assert len(proposer.requests) == 3
+    assert len(result.candidates) == 2
+    assert "call_count=3/3" in (result.trace[-1].note or "")
+
+
+@pytest.mark.asyncio
 async def test_majority_and_weighted_vote_can_choose_different_groups() -> None:
     providers = {
         "a": StaticProvider(provider_config("a", 1.0), "Answer: blue"),

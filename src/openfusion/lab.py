@@ -8,7 +8,7 @@ import random
 import statistics
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -436,7 +436,7 @@ async def run_lab_experiment(
 
     return LabResultCard(
         experiment=config.experiment,
-        timestamp=datetime.now(UTC).isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         platform={
             "system": platform.system(),
             "release": platform.release(),

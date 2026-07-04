@@ -189,6 +189,36 @@ class StrategyResultSummary(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class BaselineResultSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    provider: str
+    model: str
+    metrics: LabMetricSummary
+    balanced_score: float | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class StrategyComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: str
+    accuracy_delta_vs_fallback_pp: float | None = None
+    accuracy_delta_vs_best_single_pp: float | None = None
+    accuracy_relative_vs_fallback_percent: float | None = None
+    accuracy_relative_vs_best_single_percent: float | None = None
+    latency_ratio_vs_fallback: float | None = None
+    latency_ratio_vs_best_single: float | None = None
+    calls_ratio_vs_fallback: float | None = None
+    calls_ratio_vs_best_single: float | None = None
+    tokens_ratio_vs_fallback: float | None = None
+    tokens_ratio_vs_best_single: float | None = None
+    balanced_score_delta_vs_fallback: float | None = None
+    balanced_score_delta_vs_best_single: float | None = None
+    recommendation_hint: str | None = None
+
+
 class LabRecommendation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -196,6 +226,8 @@ class LabRecommendation(BaseModel):
     best_latency: str | None = None
     best_efficiency: str | None = None
     best_balanced: str | None = None
+    by_objective: dict[str, str | None] = Field(default_factory=dict)
+    explanations_by_objective: dict[str, list[str]] = Field(default_factory=dict)
     explanations: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
@@ -212,6 +244,15 @@ class LabResultCard(BaseModel):
     dataset: dict[str, Any]
     engines: list[dict[str, Any]]
     models: list[dict[str, Any]]
+    baselines: list[BaselineResultSummary] = Field(default_factory=list)
+    first_provider_baseline: BaselineResultSummary | None = None
+    fallback_baseline: StrategyResultSummary | None = None
+    best_single_model_baseline: BaselineResultSummary | None = None
+    best_single_model_by_accuracy: BaselineResultSummary | None = None
+    best_single_model_by_latency: BaselineResultSummary | None = None
+    best_single_model_by_efficiency: BaselineResultSummary | None = None
+    best_single_model_by_balanced_score: BaselineResultSummary | None = None
+    strategy_comparisons: list[StrategyComparison] = Field(default_factory=list)
     strategies: list[StrategyResultSummary]
     recommendations: LabRecommendation
     warnings: list[str] = Field(default_factory=list)
@@ -387,7 +428,7 @@ def write_generated_config(config: LabConfig, out: str | Path) -> None:
 def load_lab_dataset(path: str | Path, *, max_examples: int | None = None, seed: int = 0) -> list[LabExample]:
     dataset_path = Path(path)
     examples: list[LabExample] = []
-    for line_number, line in enumerate(dataset_path.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_number, line in enumerate(dataset_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         try:
@@ -419,6 +460,15 @@ async def run_lab_experiment(
     )
     engine = FusionEngine(app_config, providers=providers)
     try:
+        by_baseline: dict[str, list[LabExampleResult]] = {}
+        for model in config.models:
+            baseline_name = _baseline_name(model.provider_name)
+            by_baseline[baseline_name] = await _run_provider_baseline(
+                engine,
+                config,
+                model.provider_name,
+                examples,
+            )
         by_strategy: dict[str, list[LabExampleResult]] = {}
         for strategy in config.strategies:
             by_strategy[strategy.name] = await _run_strategy(engine, config, strategy, examples)
@@ -427,10 +477,33 @@ async def run_lab_experiment(
 
     baseline_strategy = "fallback" if "fallback" in by_strategy else next(iter(by_strategy), None)
     strategy_summaries = _summarize_strategies(by_strategy, baseline_strategy)
+    baseline_summaries = _summarize_baselines(by_baseline, config.models)
+    first_provider_baseline = baseline_summaries[0] if baseline_summaries else None
+    fallback_baseline = next(
+        (summary for summary in strategy_summaries if summary.strategy == baseline_strategy),
+        None,
+    )
+    best_single_by_accuracy = _best_single_model_by_accuracy(baseline_summaries)
+    best_single_by_latency = _best_single_model_by_latency(baseline_summaries)
+    best_single_by_efficiency = _best_single_model_by_efficiency(baseline_summaries)
+    best_single_by_balanced = _best_single_model_by_balanced_score(
+        baseline_summaries,
+        first_provider_baseline,
+        config.recommendation,
+    )
+    strategy_comparisons = _strategy_comparisons(
+        strategy_summaries,
+        fallback_baseline=fallback_baseline,
+        best_single_model=best_single_by_accuracy,
+        settings=config.recommendation,
+    )
     recommendations = recommend_from_summaries(
         strategy_summaries,
         baseline_strategy=baseline_strategy,
         settings=config.recommendation,
+        baselines=baseline_summaries,
+        fallback_baseline=fallback_baseline,
+        best_single_model=best_single_by_accuracy,
     )
     warnings = list(recommendations.warnings)
 
@@ -453,6 +526,15 @@ async def run_lab_experiment(
         },
         engines=[_safe_engine_metadata(engine) for engine in config.engines],
         models=[_safe_model_metadata(model) for model in config.models],
+        baselines=baseline_summaries,
+        first_provider_baseline=first_provider_baseline,
+        fallback_baseline=fallback_baseline,
+        best_single_model_baseline=best_single_by_accuracy,
+        best_single_model_by_accuracy=best_single_by_accuracy,
+        best_single_model_by_latency=best_single_by_latency,
+        best_single_model_by_efficiency=best_single_by_efficiency,
+        best_single_model_by_balanced_score=best_single_by_balanced,
+        strategy_comparisons=strategy_comparisons,
         strategies=strategy_summaries,
         recommendations=recommendations,
         warnings=warnings,
@@ -493,6 +575,9 @@ def recommend_from_card(card: LabResultCard) -> LabRecommendation:
         card.strategies,
         baseline_strategy=_baseline_strategy(card.strategies),
         settings=LabRecommendationSettings(),
+        baselines=card.baselines,
+        fallback_baseline=card.fallback_baseline,
+        best_single_model=card.best_single_model_baseline,
     )
 
 
@@ -501,15 +586,27 @@ def recommend_from_summaries(
     *,
     baseline_strategy: str | None,
     settings: LabRecommendationSettings,
+    baselines: list[BaselineResultSummary] | None = None,
+    fallback_baseline: StrategyResultSummary | None = None,
+    best_single_model: BaselineResultSummary | None = None,
 ) -> LabRecommendation:
     if not summaries:
         return LabRecommendation(
+            by_objective={
+                "best_accuracy": None,
+                "best_latency": None,
+                "best_efficiency": None,
+                "best_balanced": None,
+            },
             explanations=[
                 "These recommendations apply only to this dataset, model set, hardware, and call budget."
-            ]
+            ],
         )
 
-    baseline = next((summary for summary in summaries if summary.strategy == baseline_strategy), None)
+    baseline = fallback_baseline or next(
+        (summary for summary in summaries if summary.strategy == baseline_strategy),
+        None,
+    )
     scored = [
         summary.model_copy(
             update={
@@ -551,34 +648,61 @@ def recommend_from_summaries(
     )
     best_balanced = max(scored, key=lambda item: item.balanced_score or float("-inf"))
 
+    by_objective = {
+        "best_accuracy": best_accuracy.strategy,
+        "best_latency": best_latency.strategy,
+        "best_efficiency": best_efficiency.strategy,
+        "best_balanced": best_balanced.strategy,
+    }
+    explanations_by_objective = {
+        "best_accuracy": [
+            _accuracy_explanation(best_accuracy, baseline, best_single_model),
+        ],
+        "best_latency": [
+            _latency_explanation(best_latency, best_single_model),
+        ],
+        "best_efficiency": [
+            f"{best_efficiency.strategy} gave the best accuracy per call.",
+        ],
+        "best_balanced": [
+            f"{best_balanced.strategy} had the best balanced score under the configured penalties.",
+        ],
+    }
     explanations = [
-        _accuracy_explanation(best_accuracy, baseline),
-        f"{best_efficiency.strategy} gave the best accuracy per call.",
-        f"{best_balanced.strategy} had the best balanced score under the configured penalties.",
-        "These recommendations apply only to this dataset, model set, hardware, and call budget.",
+        item
+        for objective in (
+            "best_accuracy",
+            "best_latency",
+            "best_efficiency",
+            "best_balanced",
+        )
+        for item in explanations_by_objective[objective]
     ]
-    if best_latency.strategy == "uncertainty_cascade":
-        explanations.append("uncertainty_cascade is recommended when latency/calls matter.")
-    elif best_latency.strategy:
-        explanations.append(f"{best_latency.strategy} had the lowest average latency.")
+    explanations.append(
+        "These recommendations apply only to this dataset, model set, hardware, and call budget."
+    )
 
     warnings: list[str] = []
     if baseline:
         non_baseline = [summary for summary in scored if summary.strategy != baseline.strategy]
         if non_baseline and max(item.metrics.accuracy for item in non_baseline) <= baseline.metrics.accuracy:
             warnings.append("Fusion did not beat the fallback baseline on accuracy.")
-            for summary in non_baseline:
-                if summary.metrics.accuracy <= baseline.metrics.accuracy:
-                    explanations.append(
-                        f"{summary.strategy} is not recommended on this dataset because it did not "
-                        f"improve over {baseline.strategy}."
-                    )
         if baseline.metrics.avg_latency_ms > 0:
             ratio = best_accuracy.metrics.avg_latency_ms / baseline.metrics.avg_latency_ms
             if ratio >= 3.0:
                 warnings.append(
                     f"{best_accuracy.strategy} was {ratio:.1f}x slower than {baseline.strategy}."
                 )
+    if best_single_model:
+        fusion_summaries = [
+            summary for summary in scored if not _is_baseline_strategy(summary.strategy)
+        ]
+        if (
+            fusion_summaries
+            and max(summary.metrics.accuracy for summary in fusion_summaries)
+            <= best_single_model.metrics.accuracy
+        ):
+            warnings.append("Fusion is not recommended for accuracy on this dataset.")
     if (
         settings.max_latency_ms is not None
         and best_accuracy.metrics.avg_latency_ms > settings.max_latency_ms
@@ -592,8 +716,10 @@ def recommend_from_summaries(
         best_latency=best_latency.strategy,
         best_efficiency=best_efficiency.strategy,
         best_balanced=best_balanced.strategy,
+        by_objective=by_objective,
+        explanations_by_objective=explanations_by_objective,
         explanations=list(dict.fromkeys(explanations)),
-        warnings=warnings,
+        warnings=list(dict.fromkeys(warnings)),
     )
 
 
@@ -719,6 +845,51 @@ def _parse_lab_example(raw: dict[str, Any]) -> LabExample:
     )
 
 
+def _baseline_name(provider_name: str) -> str:
+    return f"baseline/{provider_name}"
+
+
+async def _run_provider_baseline(
+    engine: FusionEngine,
+    config: LabConfig,
+    provider_name: str,
+    examples: list[LabExample],
+) -> list[LabExampleResult]:
+    results: list[LabExampleResult] = []
+    for example in examples:
+        started = time.perf_counter()
+        try:
+            fusion_result = await engine.run_provider(
+                provider_name,
+                example.messages,
+                temperature=config.experiment.temperature,
+                max_tokens=config.experiment.max_tokens,
+            )
+            correct = _grade_lab_output(config.dataset.answer_mode, fusion_result, example)
+            results.append(
+                LabExampleResult(
+                    id=example.id,
+                    correct=correct,
+                    output=fusion_result.final,
+                    calls=_call_count(fusion_result),
+                    latency_ms=_latency_ms(fusion_result, started),
+                    prompt_tokens=fusion_result.usage.prompt_tokens,
+                    completion_tokens=fusion_result.usage.completion_tokens,
+                    total_tokens=fusion_result.usage.total_tokens,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - one failed example should not stop the lab
+            results.append(
+                LabExampleResult(
+                    id=example.id,
+                    correct=False,
+                    error=f"{exc.__class__.__name__}: {exc}",
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                )
+            )
+    return results
+
+
 async def _run_strategy(
     engine: FusionEngine,
     config: LabConfig,
@@ -796,6 +967,26 @@ def _summarize_strategies(
     return summaries
 
 
+def _summarize_baselines(
+    by_baseline: dict[str, list[LabExampleResult]],
+    models: list[LabModel],
+) -> list[BaselineResultSummary]:
+    summaries: list[BaselineResultSummary] = []
+    models_by_provider = {model.provider_name: model for model in models}
+    for name, results in by_baseline.items():
+        provider_name = name.removeprefix("baseline/")
+        model = models_by_provider.get(provider_name)
+        summaries.append(
+            BaselineResultSummary(
+                name=name,
+                provider=provider_name,
+                model=model.model if model else "",
+                metrics=_metrics(results, None),
+            )
+        )
+    return summaries
+
+
 def _metrics(
     results: list[LabExampleResult],
     baseline_by_id: dict[str, LabExampleResult] | None,
@@ -854,10 +1045,240 @@ def _balanced_score(
     return metrics.accuracy - latency_penalty - call_penalty - failure_penalty
 
 
+def _best_single_model_by_accuracy(
+    baselines: list[BaselineResultSummary],
+) -> BaselineResultSummary | None:
+    if not baselines:
+        return None
+    return max(
+        baselines,
+        key=lambda item: (
+            item.metrics.accuracy,
+            -item.metrics.failures,
+            -item.metrics.avg_latency_ms,
+            -item.metrics.total_calls,
+        ),
+    )
+
+
+def _best_single_model_by_latency(
+    baselines: list[BaselineResultSummary],
+) -> BaselineResultSummary | None:
+    if not baselines:
+        return None
+    return min(
+        baselines,
+        key=lambda item: (
+            item.metrics.avg_latency_ms if item.metrics.total_examples else float("inf"),
+            -item.metrics.accuracy,
+        ),
+    )
+
+
+def _best_single_model_by_efficiency(
+    baselines: list[BaselineResultSummary],
+) -> BaselineResultSummary | None:
+    if not baselines:
+        return None
+    return max(
+        baselines,
+        key=lambda item: (
+            item.metrics.accuracy_per_call,
+            item.metrics.accuracy_per_1k_tokens,
+            item.metrics.accuracy,
+        ),
+    )
+
+
+def _best_single_model_by_balanced_score(
+    baselines: list[BaselineResultSummary],
+    first_provider_baseline: BaselineResultSummary | None,
+    settings: LabRecommendationSettings,
+) -> BaselineResultSummary | None:
+    if not baselines:
+        return None
+    baseline_metrics = first_provider_baseline.metrics if first_provider_baseline else None
+    scored = [
+        summary.model_copy(
+            update={
+                "balanced_score": _balanced_score(summary.metrics, baseline_metrics, settings),
+            }
+        )
+        for summary in baselines
+    ]
+    for index, summary in enumerate(scored):
+        baselines[index].balanced_score = summary.balanced_score
+    return max(scored, key=lambda item: item.balanced_score or float("-inf"))
+
+
+def _strategy_comparisons(
+    summaries: list[StrategyResultSummary],
+    *,
+    fallback_baseline: StrategyResultSummary | None,
+    best_single_model: BaselineResultSummary | None,
+    settings: LabRecommendationSettings,
+) -> list[StrategyComparison]:
+    comparisons: list[StrategyComparison] = []
+    for summary in summaries:
+        fallback_metrics = fallback_baseline.metrics if fallback_baseline else None
+        best_single_metrics = best_single_model.metrics if best_single_model else None
+        fallback_balanced = (
+            _balanced_score(fallback_metrics, fallback_metrics, settings)
+            if fallback_metrics
+            else None
+        )
+        best_single_balanced = (
+            _balanced_score(best_single_metrics, best_single_metrics, settings)
+            if best_single_metrics
+            else None
+        )
+        summary_balanced_vs_fallback = _balanced_score(
+            summary.metrics,
+            fallback_metrics,
+            settings,
+        )
+        summary_balanced_vs_best_single = _balanced_score(
+            summary.metrics,
+            best_single_metrics,
+            settings,
+        )
+        comparisons.append(
+            StrategyComparison(
+                strategy=summary.strategy,
+                accuracy_delta_vs_fallback_pp=_accuracy_delta_pp(
+                    summary.metrics,
+                    fallback_metrics,
+                ),
+                accuracy_delta_vs_best_single_pp=_accuracy_delta_pp(
+                    summary.metrics,
+                    best_single_metrics,
+                ),
+                accuracy_relative_vs_fallback_percent=_relative_accuracy_percent(
+                    summary.metrics,
+                    fallback_metrics,
+                ),
+                accuracy_relative_vs_best_single_percent=_relative_accuracy_percent(
+                    summary.metrics,
+                    best_single_metrics,
+                ),
+                latency_ratio_vs_fallback=_safe_ratio(
+                    summary.metrics.avg_latency_ms,
+                    fallback_metrics.avg_latency_ms if fallback_metrics else None,
+                ),
+                latency_ratio_vs_best_single=_safe_ratio(
+                    summary.metrics.avg_latency_ms,
+                    best_single_metrics.avg_latency_ms if best_single_metrics else None,
+                ),
+                calls_ratio_vs_fallback=_safe_ratio(
+                    summary.metrics.total_calls,
+                    fallback_metrics.total_calls if fallback_metrics else None,
+                ),
+                calls_ratio_vs_best_single=_safe_ratio(
+                    summary.metrics.total_calls,
+                    best_single_metrics.total_calls if best_single_metrics else None,
+                ),
+                tokens_ratio_vs_fallback=_safe_ratio(
+                    summary.metrics.total_tokens,
+                    fallback_metrics.total_tokens if fallback_metrics else None,
+                ),
+                tokens_ratio_vs_best_single=_safe_ratio(
+                    summary.metrics.total_tokens,
+                    best_single_metrics.total_tokens if best_single_metrics else None,
+                ),
+                balanced_score_delta_vs_fallback=_safe_delta(
+                    summary_balanced_vs_fallback,
+                    fallback_balanced,
+                ),
+                balanced_score_delta_vs_best_single=_safe_delta(
+                    summary_balanced_vs_best_single,
+                    best_single_balanced,
+                ),
+                recommendation_hint=_comparison_hint(
+                    summary,
+                    fallback_baseline=fallback_baseline,
+                    best_single_model=best_single_model,
+                ),
+            )
+        )
+    return comparisons
+
+
+def _accuracy_delta_pp(
+    metrics: LabMetricSummary,
+    baseline: LabMetricSummary | None,
+) -> float | None:
+    if baseline is None:
+        return None
+    return (metrics.accuracy - baseline.accuracy) * 100
+
+
+def _relative_accuracy_percent(
+    metrics: LabMetricSummary,
+    baseline: LabMetricSummary | None,
+) -> float | None:
+    if baseline is None or baseline.accuracy == 0:
+        return None
+    return ((metrics.accuracy - baseline.accuracy) / baseline.accuracy) * 100
+
+
+def _safe_ratio(numerator: float | int | None, denominator: float | int | None) -> float | None:
+    if numerator is None or denominator is None or denominator == 0:
+        return None
+    return numerator / denominator
+
+
+def _safe_delta(value: float | None, baseline: float | None) -> float | None:
+    if value is None or baseline is None:
+        return None
+    return value - baseline
+
+
+def _comparison_hint(
+    summary: StrategyResultSummary,
+    *,
+    fallback_baseline: StrategyResultSummary | None,
+    best_single_model: BaselineResultSummary | None,
+) -> str:
+    if fallback_baseline and summary.strategy == fallback_baseline.strategy:
+        return "fallback baseline"
+    if best_single_model is None:
+        return "no single-model baseline"
+    accuracy_delta = summary.metrics.accuracy - best_single_model.metrics.accuracy
+    latency_ratio = _safe_ratio(
+        summary.metrics.avg_latency_ms,
+        best_single_model.metrics.avg_latency_ms,
+    )
+    if accuracy_delta > 0:
+        return "accuracy gain over best single"
+    if accuracy_delta == 0 and latency_ratio is not None and latency_ratio > 1.1:
+        return f"matched accuracy, {latency_ratio:.1f}x slower"
+    if accuracy_delta < 0 and latency_ratio is not None and latency_ratio < 1:
+        return "lower accuracy, faster"
+    if accuracy_delta < 0:
+        return "accuracy regression vs best single"
+    return "matched best single"
+
+
 def _accuracy_explanation(
     best_accuracy: StrategyResultSummary,
     baseline: StrategyResultSummary | None,
+    best_single_model: BaselineResultSummary | None = None,
 ) -> str:
+    if best_single_model:
+        delta_pp = _accuracy_delta_pp(best_accuracy.metrics, best_single_model.metrics)
+        latency_ratio = _safe_ratio(
+            best_accuracy.metrics.avg_latency_ms,
+            best_single_model.metrics.avg_latency_ms,
+        )
+        if delta_pp is not None and delta_pp > 0:
+            return (
+                f"{best_accuracy.strategy} improved accuracy by "
+                f"{delta_pp:+.1f} pp over the best single model."
+            )
+        if delta_pp == 0 and latency_ratio is not None and latency_ratio > 1:
+            return f"{best_accuracy.strategy} matched accuracy but was {latency_ratio:.1f}x slower."
+        if delta_pp is not None and delta_pp < 0:
+            return f"{best_accuracy.strategy} lost {delta_pp:+.1f} pp versus the best single model."
     if baseline and baseline.metrics.avg_latency_ms > 0 and best_accuracy.strategy != baseline.strategy:
         ratio = best_accuracy.metrics.avg_latency_ms / baseline.metrics.avg_latency_ms
         return (
@@ -865,6 +1286,31 @@ def _accuracy_explanation(
             f"{ratio:.1f}x slower than {baseline.strategy}."
         )
     return f"{best_accuracy.strategy} had the best accuracy."
+
+
+def _latency_explanation(
+    best_latency: StrategyResultSummary,
+    best_single_model: BaselineResultSummary | None,
+) -> str:
+    if best_single_model:
+        delta_pp = _accuracy_delta_pp(best_latency.metrics, best_single_model.metrics)
+        call_ratio = _safe_ratio(best_latency.metrics.total_calls, best_single_model.metrics.total_calls)
+        if best_latency.strategy == "uncertainty_cascade" and call_ratio is not None and call_ratio <= 1:
+            return (
+                "uncertainty_cascade is recommended for latency/call reduction, "
+                "but not for accuracy improvement."
+            )
+        if delta_pp is not None and delta_pp < 0:
+            return (
+                f"{best_latency.strategy} reduced latency but lost {delta_pp:+.1f} pp accuracy."
+            )
+    if best_latency.strategy == "uncertainty_cascade":
+        return "uncertainty_cascade is recommended for latency/call reduction."
+    return f"{best_latency.strategy} had the lowest average latency."
+
+
+def _is_baseline_strategy(strategy: str) -> bool:
+    return strategy == "fallback" or strategy.startswith("baseline/")
 
 
 def _percentile(values: list[int], percentile: int) -> float:

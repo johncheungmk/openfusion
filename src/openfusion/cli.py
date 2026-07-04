@@ -345,7 +345,7 @@ def lab_run(
     card = run_lab_experiment_sync(cfg, lab_path=lab_yaml, include_samples=include_samples)
     Path(out).write_text(card.model_dump_json(indent=2), encoding="utf-8")
     console.print(f"[green]Wrote[/green] {out}")
-    _print_recommendation(card.recommendations)
+    _print_lab_report(card)
 
 
 @lab_app.command("recommend")
@@ -353,7 +353,8 @@ def lab_recommend(results_json: str = typer.Argument(..., help="Path to result c
     """Print strategy recommendations from a result card."""
     card = load_result_card(results_json)
     recommendation = recommend_from_card(card)
-    _print_recommendation(recommendation)
+    card.recommendations = recommendation
+    _print_lab_report(card)
 
 
 @lab_app.command("export")
@@ -409,12 +410,90 @@ def lab_engine_plan(lab_yaml: str = typer.Argument(..., help="Path to lab.yaml."
     console.print(build_engine_plan(cfg))
 
 
+def _print_lab_report(card) -> None:
+    if card.baselines:
+        table = Table(title="Single-model baselines")
+        for column in (
+            "Provider",
+            "Model",
+            "Accuracy",
+            "Correct/Total",
+            "Avg Latency",
+            "Total Calls",
+            "Total Tokens",
+            "Accuracy/Call",
+            "Accuracy/1k Tokens",
+        ):
+            table.add_column(column)
+        for baseline in card.baselines:
+            metrics = baseline.metrics
+            table.add_row(
+                baseline.provider,
+                baseline.model,
+                _format_percent(metrics.accuracy),
+                f"{metrics.correct}/{metrics.total_examples}",
+                _format_ms(metrics.avg_latency_ms),
+                str(metrics.total_calls),
+                str(metrics.total_tokens),
+                _format_float(metrics.accuracy_per_call, digits=4),
+                _format_float(metrics.accuracy_per_1k_tokens),
+            )
+        console.print(table)
+
+    if card.strategy_comparisons:
+        summaries = {summary.strategy: summary for summary in card.strategies}
+        table = Table(title="Strategy comparison")
+        for column in (
+            "Strategy",
+            "Accuracy",
+            "Delta vs Fallback",
+            "Delta vs Best Single",
+            "Avg Latency",
+            "Latency Ratio vs Best Single",
+            "Avg Calls",
+            "Call Ratio vs Best Single",
+            "Total Tokens",
+            "Recommendation Hint",
+        ):
+            table.add_column(column)
+        for comparison in card.strategy_comparisons:
+            summary = summaries.get(comparison.strategy)
+            if summary is None:
+                continue
+            metrics = summary.metrics
+            table.add_row(
+                comparison.strategy,
+                _format_percent(metrics.accuracy),
+                _format_pp(comparison.accuracy_delta_vs_fallback_pp),
+                _format_pp(comparison.accuracy_delta_vs_best_single_pp),
+                _format_ms(metrics.avg_latency_ms),
+                _format_ratio(comparison.latency_ratio_vs_best_single),
+                _format_float(metrics.avg_calls_per_example),
+                _format_ratio(comparison.calls_ratio_vs_best_single),
+                str(metrics.total_tokens),
+                comparison.recommendation_hint or "-",
+            )
+        console.print(table)
+
+    _print_recommendation(card.recommendations)
+
+
 def _print_recommendation(recommendation) -> None:
     console.print("[bold]Recommendations[/bold]")
-    console.print(f"best_accuracy: {recommendation.best_accuracy}")
-    console.print(f"best_latency: {recommendation.best_latency}")
-    console.print(f"best_efficiency: {recommendation.best_efficiency}")
-    console.print(f"best_balanced: {recommendation.best_balanced}")
+    by_objective = recommendation.by_objective or {
+        "best_accuracy": recommendation.best_accuracy,
+        "best_latency": recommendation.best_latency,
+        "best_efficiency": recommendation.best_efficiency,
+        "best_balanced": recommendation.best_balanced,
+    }
+    for objective in ("best_accuracy", "best_latency", "best_efficiency", "best_balanced"):
+        console.print(f"{objective}: {by_objective.get(objective)}")
+    if recommendation.explanations_by_objective:
+        console.print("\n[bold]Objective explanations[/bold]")
+        for objective in ("best_accuracy", "best_latency", "best_efficiency", "best_balanced"):
+            explanations = recommendation.explanations_by_objective.get(objective) or []
+            for explanation in explanations:
+                console.print(f"- {objective}: {explanation}")
     if recommendation.explanations:
         console.print("\n[bold]Explanations[/bold]")
         for explanation in recommendation.explanations:
@@ -423,6 +502,36 @@ def _print_recommendation(recommendation) -> None:
         console.print("\n[bold yellow]Warnings[/bold yellow]")
         for warning in recommendation.warnings:
             console.print(f"- {warning}")
+
+
+def _format_percent(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value * 100:.1f}%"
+
+
+def _format_pp(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:+.1f} pp"
+
+
+def _format_ratio(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.2f}x"
+
+
+def _format_ms(value: float | int | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.0f} ms"
+
+
+def _format_float(value: float | int | None, *, digits: int = 2) -> str:
+    if value is None:
+        return "-"
+    return f"{value:.{digits}f}"
 
 
 @app.command()

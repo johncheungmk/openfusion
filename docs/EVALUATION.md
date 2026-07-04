@@ -134,6 +134,18 @@ synthesis is more appropriate than exact voting.
 Use `uncertainty_cascade` when cost and latency matter and a cheaper provider can
 often answer confidently enough without escalation.
 
+## Recommended Testing Methodology
+
+1. Single-model baselines: evaluate model A alone, model B alone, and the best single model.
+2. Same-model test-time compute: evaluate `self_moa` with the best model, and `self_moa_seq` when many samples are used.
+3. Mixed-model fusion: use `semantic_vote` for short exact-answer tasks, `parallel_synthesis` for open-ended tasks, and `pairwise_rank_fuse` for candidate ranking plus synthesis.
+4. Cascade: use `uncertainty_cascade` for cost- or latency-sensitive use.
+5. Equal-budget comparison: compare N calls of the best single model against N calls of mixed fusion.
+6. Metrics: report accuracy or win rate, latency p50/p95, total calls, tokens, accuracy per call, accuracy per 1k tokens, delta versus fallback, and delta versus the best single model.
+7. Report negative results: if fusion does not help, say so.
+
+OpenRouter Fusion compared solo models, self-fusion, mixed panels, and budget panels. OpenFusion users should reproduce that structure with their own models and tasks, not claim the same scores.
+
 ## Contamination
 
 OpenFusion evaluation does not implement web search. If a future deployment enables

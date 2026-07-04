@@ -20,7 +20,7 @@ openfusion lab generate-config examples/lab_llama_gptoss.yaml --out openfusion.l
 openfusion lab validate examples/lab_llama_gptoss.yaml
 ```
 
-5. Run strategies:
+5. Run direct per-provider baselines and strategies:
 
 ```bash
 openfusion lab run examples/lab_llama_gptoss.yaml --out results.json
@@ -38,7 +38,19 @@ openfusion lab recommend results.json
 openfusion lab export results.json --out result-card.json
 ```
 
-Result cards use `schema_version: openfusion-lab-result-v1` and omit secrets, provider headers, raw prompts, and raw references by default. Future result cards may support public leaderboard workflows.
+Result cards use `schema_version: openfusion-lab-result-v1` and omit secrets, provider headers, raw prompts, and raw references by default. They include `baselines`, `best_single_model_baseline`, `fallback_baseline`, `strategy_comparisons`, and objective-specific recommendations. Future result cards may support public leaderboard workflows.
+
+## Recommended Testing Methodology
+
+1. Single-model baselines: run model A alone, model B alone, and identify the best single model.
+2. Same-model test-time compute: run `self_moa` with the best model, and use `self_moa_seq` if many samples are used.
+3. Mixed-model fusion: use `semantic_vote` for short exact-answer tasks, `parallel_synthesis` for open-ended tasks, and `pairwise_rank_fuse` for candidate ranking plus synthesis.
+4. Cascade: use `uncertainty_cascade` for cost- or latency-sensitive runs.
+5. Equal-budget comparison: compare N calls of the best single model against N calls of mixed fusion.
+6. Metrics: report accuracy or win rate, latency p50/p95, total calls, tokens, accuracy per call, accuracy per 1k tokens, delta versus fallback, and delta versus the best single model.
+7. Report negative results: if fusion does not help, say so.
+
+OpenRouter Fusion compared solo models, self-fusion, mixed panels, and budget panels. OpenFusion users should reproduce the structure for their local model set and dataset, not claim the same scores.
 
 ## Dataset Format
 

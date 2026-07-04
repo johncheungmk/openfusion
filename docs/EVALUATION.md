@@ -32,6 +32,16 @@ openfusion evaluate examples/eval_sample.jsonl \
   --config openfusion.yaml \
   --strategy weighted_vote \
   --output weighted-vote.json
+
+openfusion evaluate examples/eval_sample.jsonl \
+  --config examples/semantic_vote.yaml \
+  --strategy semantic_vote \
+  --output semantic-vote.json
+
+openfusion evaluate examples/eval_sample.jsonl \
+  --config examples/moa_pairwise_rank_fuse.yaml \
+  --strategy pairwise_rank_fuse \
+  --output pairwise-rank-fuse.json
 ```
 
 Compare at least:
@@ -44,3 +54,7 @@ Compare at least:
 - failure rate.
 
 The built-in score is normalized exact match. Use a domain-specific test executor, citation checker, retrieval-grounding grader, or blinded human evaluation for open-ended tasks.
+
+Use `semantic_vote` for concise answers that may be equivalent despite different
+wording. Use `pairwise_rank_fuse` for open-ended answers where ranked top-candidate
+synthesis is more appropriate than exact voting.

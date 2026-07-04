@@ -1,0 +1,34 @@
+providers:
+  - name: local-ollama
+    type: openai_compatible
+    enabled: true
+    base_url: http://localhost:11434/v1
+    api_key_env:
+    model: llama3.2:3b
+    timeout_seconds: 300
+    weight: 1.0
+    headers: {}
+
+fusion:
+  default_strategy: pairwise_rank_fuse
+  panel: [local-ollama]
+  judge_provider: local-ollama
+  ranker_provider: local-ollama
+  fuser_provider: local-ollama
+  max_parallel: 2
+  max_total_calls: 8
+  samples_per_provider: 3
+  rank_top_k: 2
+  pairwise_rank_max_pairs: 3
+  pairwise_rank_mode: pairwise
+  temperature: 0.4
+  judge_temperature: 0.1
+  max_tokens: 256
+  include_candidate_outputs: true
+  include_workflow_outputs: true
+  structured_synthesis: true
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  api_key_env: OPENFUSION_API_KEY

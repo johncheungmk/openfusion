@@ -46,8 +46,8 @@ providers:
 
 fusion:
   # Supported: fallback, parallel_synthesis, self_moa, self_moa_seq,
-  # best_of_n, majority_vote, weighted_vote, critique_revision,
-  # layered_refinement, adaptive.
+  # pairwise_rank_fuse, semantic_vote, best_of_n, majority_vote,
+  # weighted_vote, critique_revision, layered_refinement, adaptive.
   default_strategy: parallel_synthesis
   panel: [local-ollama]
   panel_roles:
@@ -64,6 +64,9 @@ fusion:
   reviser_provider: local-ollama
   planner_provider:
   self_moa_provider:
+  ranker_provider:
+  fuser_provider:
+  vote_equivalence_provider:
 
   max_parallel: 2
   max_total_calls: 8
@@ -72,12 +75,17 @@ fusion:
   self_moa_samples: 3
   self_moa_batch_size: 4
   self_moa_seq_carry_max_chars: 12000
+  rank_top_k: 3
+  pairwise_rank_max_pairs: 12
+  semantic_vote_max_pairs: 12
 
   temperature: 0.2
   judge_temperature: 0.1
   critique_temperature: 0.1
   self_moa_temperature: 0.7
   self_moa_mode: synthesize
+  pairwise_rank_mode: pairwise
+  semantic_vote_mode: rule_only
   max_tokens: 256
 
   require_at_least_successes: 1

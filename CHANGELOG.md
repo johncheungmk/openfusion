@@ -7,6 +7,7 @@
 - Added Self-MoA config and request overrides for provider, sample count, mode, batching, carry size, and sampling temperature.
 - Added role-diverse panel prompts via `fusion.panel_roles`.
 - Added optional structured synthesis sections via `fusion.structured_synthesis` and `fusion_structured_synthesis`.
+- Added `pairwise_rank_fuse` and `semantic_vote` strategies with model IDs.
 - Preserved `panel_judge` as a backward-compatible alias for `parallel_synthesis`.
 
 ## 0.2.1

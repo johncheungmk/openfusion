@@ -68,6 +68,9 @@ class FusionConfig(BaseModel):
     reviser_provider: str | None = None
     planner_provider: str | None = None
     self_moa_provider: str | None = None
+    ranker_provider: str | None = None
+    fuser_provider: str | None = None
+    vote_equivalence_provider: str | None = None
 
     max_parallel: int = 4
     max_total_calls: int = 12
@@ -76,6 +79,9 @@ class FusionConfig(BaseModel):
     self_moa_samples: int = 3
     self_moa_batch_size: int = 4
     self_moa_seq_carry_max_chars: int = 12000
+    rank_top_k: int = 3
+    pairwise_rank_max_pairs: int = 12
+    semantic_vote_max_pairs: int = 12
 
     temperature: float = 0.2
     judge_temperature: float = 0.1
@@ -83,6 +89,8 @@ class FusionConfig(BaseModel):
     self_moa_temperature: float = 0.7
     max_tokens: int | None = 256
     self_moa_mode: Literal["select", "synthesize"] = "synthesize"
+    pairwise_rank_mode: Literal["pairwise", "score"] = "pairwise"
+    semantic_vote_mode: Literal["rule_only", "llm_equivalence"] = "rule_only"
 
     require_at_least_successes: int = 1
     include_candidate_outputs: bool = True
@@ -103,6 +111,9 @@ class FusionConfig(BaseModel):
         "self_moa_samples",
         "self_moa_batch_size",
         "self_moa_seq_carry_max_chars",
+        "rank_top_k",
+        "pairwise_rank_max_pairs",
+        "semantic_vote_max_pairs",
         "require_at_least_successes",
         "judge_candidate_max_chars",
         "transcript_max_chars",
@@ -159,6 +170,9 @@ class AppConfig(BaseModel):
             "Reviser": self.fusion.reviser_provider,
             "Planner": self.fusion.planner_provider,
             "Self-MoA": self.fusion.self_moa_provider,
+            "Ranker": self.fusion.ranker_provider,
+            "Fuser": self.fusion.fuser_provider,
+            "Vote equivalence": self.fusion.vote_equivalence_provider,
         }
         for role, provider_name in role_references.items():
             if provider_name and provider_name not in known_names:
@@ -214,6 +228,11 @@ def write_example_config(path: str | Path) -> None:
             "judge_provider": "local-ollama",
             "self_moa_samples": 3,
             "self_moa_mode": "synthesize",
+            "rank_top_k": 3,
+            "pairwise_rank_max_pairs": 12,
+            "pairwise_rank_mode": "pairwise",
+            "semantic_vote_max_pairs": 12,
+            "semantic_vote_mode": "rule_only",
             "structured_synthesis": False,
             "max_tokens": 256,
         },

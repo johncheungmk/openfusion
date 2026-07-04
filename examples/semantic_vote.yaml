@@ -1,0 +1,30 @@
+providers:
+  - name: local-ollama
+    type: openai_compatible
+    enabled: true
+    base_url: http://localhost:11434/v1
+    api_key_env:
+    model: llama3.2:3b
+    timeout_seconds: 300
+    weight: 1.0
+    headers: {}
+
+fusion:
+  default_strategy: semantic_vote
+  panel: [local-ollama]
+  vote_equivalence_provider: local-ollama
+  max_parallel: 2
+  max_total_calls: 8
+  samples_per_provider: 3
+  semantic_vote_max_pairs: 6
+  semantic_vote_mode: llm_equivalence
+  temperature: 0.4
+  max_tokens: 128
+  include_candidate_outputs: true
+  include_workflow_outputs: true
+  vote_answer_regex:
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  api_key_env: OPENFUSION_API_KEY

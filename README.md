@@ -55,6 +55,8 @@ OpenFusion can also call providers directly without LiteLLM.
 | `parallel_synthesis` | Independent drafts, then a synthesizer writes a new answer. | drafts + 1 |
 | `self_moa` | Sample one provider repeatedly, then select or synthesize. | samples + 1 |
 | `self_moa_seq` | Batched Self-MoA with a running selected or fused answer. | bounded by budget |
+| `pairwise_rank_fuse` | Rank panel candidates by pairwise or score judging, then fuse top answers. | drafts + rank calls + 1 |
+| `semantic_vote` | Group concise exact or semantically equivalent answers before voting. | candidates + optional equivalence |
 | `best_of_n` | Generate alternatives and select one unchanged answer. | candidates + 1 |
 | `majority_vote` | Normalize concise answers and choose the largest exact consensus group. | candidates |
 | `weighted_vote` | As above, but sum provider weights. | candidates |
@@ -159,6 +161,9 @@ fusion:
   reviser_provider: local-ollama
   planner_provider:
   self_moa_provider:
+  ranker_provider:
+  fuser_provider:
+  vote_equivalence_provider:
 
   max_parallel: 2
   max_total_calls: 8
@@ -167,12 +172,17 @@ fusion:
   self_moa_samples: 3
   self_moa_batch_size: 4
   self_moa_seq_carry_max_chars: 12000
+  rank_top_k: 3
+  pairwise_rank_max_pairs: 12
+  semantic_vote_max_pairs: 12
 
   temperature: 0.2
   judge_temperature: 0.1
   critique_temperature: 0.1
   self_moa_temperature: 0.7
   self_moa_mode: synthesize
+  pairwise_rank_mode: pairwise
+  semantic_vote_mode: rule_only
   max_tokens: 256
 
   require_at_least_successes: 1
@@ -343,6 +353,8 @@ openfusion/parallel-synthesis
 openfusion/panel-judge            # legacy alias
 openfusion/self-moa
 openfusion/self-moa-seq
+openfusion/pairwise-rank-fuse
+openfusion/semantic-vote
 openfusion/critique-revision
 openfusion/layered-refinement
 openfusion/best-of-n
@@ -403,6 +415,22 @@ sections: `consensus_points`, `contradictions`, `unique_insights`,
 `missing_information`, and `final_answer`. Parsed sections appear in
 `openfusion.workflow_outputs` when `include_workflow_outputs` is true. If parsing
 fails, OpenFusion returns the plain synthesized answer.
+
+## Ranking and Semantic Voting
+
+`openfusion/pairwise-rank-fuse` generates panel candidates, ranks them with
+`ranker_provider`, then fuses the top `rank_top_k` candidates with `fuser_provider`
+or `judge_provider`. `pairwise_rank_mode: pairwise` performs bounded candidate
+comparisons up to `pairwise_rank_max_pairs`; `score` asks for parseable JSON scores
+in one ranker call. If ranking output cannot be parsed, OpenFusion preserves
+candidate order and still attempts synthesis.
+
+`openfusion/semantic-vote` keeps `majority_vote` and `weighted_vote` unchanged while
+adding a separate voting strategy. `semantic_vote_mode: rule_only` uses normalized
+exact voting. `llm_equivalence` asks `vote_equivalence_provider` whether concise
+answers are semantically the same, capped by `semantic_vote_max_pairs` and
+`max_total_calls`. Without an equivalence provider, it falls back to rule-only
+grouping.
 
 ## Python OpenAI SDK
 

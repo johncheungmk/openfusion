@@ -67,11 +67,29 @@ invent providers, tools, or strategies. Return strict JSON only and give one bri
 rationale, not hidden chain-of-thought.
 """
 
+RANKER_SYSTEM_PROMPT = """You are OpenFusion's public ranking agent.
+Rank candidate answers for accuracy, completeness, instruction-following, and usefulness.
+Do not expose hidden chain-of-thought. Return strict JSON only in the requested shape.
+"""
+
+PAIRWISE_RANKER_SYSTEM_PROMPT = """You are OpenFusion's pairwise ranking agent.
+Choose which candidate better answers the user's request. Do not expose hidden chain-of-thought.
+Return strict JSON only: {"winner": 1, "score_1": 0.0, "score_2": 0.0}
+"""
+
+SEMANTIC_EQUIVALENCE_SYSTEM_PROMPT = """You are OpenFusion's semantic equivalence checker.
+Decide whether two concise answers mean the same answer for the user's request. Ignore wording
+differences such as numerals versus words. Do not expose hidden chain-of-thought. Return strict
+JSON only: {"equivalent": true}
+"""
+
 SUPPORTED_STRATEGIES = (
     "fallback",
     "parallel_synthesis",
     "self_moa",
     "self_moa_seq",
+    "pairwise_rank_fuse",
+    "semantic_vote",
     "best_of_n",
     "majority_vote",
     "weighted_vote",
@@ -90,6 +108,9 @@ STRATEGY_ALIASES = {
     "fusion": "parallel_synthesis",
     "self-moa": "self_moa",
     "self-moa-seq": "self_moa_seq",
+    "pairwise-rank-fuse": "pairwise_rank_fuse",
+    "rank-fuse": "pairwise_rank_fuse",
+    "semantic-vote": "semantic_vote",
     "best-of-n": "best_of_n",
     "majority-vote": "majority_vote",
     "weighted-vote": "weighted_vote",
@@ -112,6 +133,14 @@ class CallBudget:
             return False
         self.used += 1
         return True
+
+
+@dataclass
+class RankingResult:
+    ordered: list[CandidateResult]
+    usage: Usage
+    summary: dict[str, Any]
+    parsed: bool
 
 
 def canonical_strategy(strategy: str) -> str:
@@ -211,6 +240,10 @@ class FusionEngine:
         self_moa_samples: int | None = None,
         self_moa_mode: str | None = None,
         structured_synthesis: bool | None = None,
+        ranker_provider: str | None = None,
+        rank_top_k: int | None = None,
+        pairwise_rank_max_pairs: int | None = None,
+        pairwise_rank_mode: str | None = None,
     ) -> FusionResult:
         selected_strategy = canonical_strategy(strategy or self.config.fusion.default_strategy)
         panel_names = self._panel_names(panel)
@@ -219,6 +252,16 @@ class FusionEngine:
         selected_self_moa_mode = self_moa_mode or self.config.fusion.self_moa_mode
         if selected_self_moa_mode not in {"select", "synthesize"}:
             raise ValueError("self_moa_mode must be either 'select' or 'synthesize'")
+        selected_pairwise_rank_mode = (
+            pairwise_rank_mode or self.config.fusion.pairwise_rank_mode
+        )
+        if selected_pairwise_rank_mode not in {"pairwise", "score"}:
+            raise ValueError("pairwise_rank_mode must be either 'pairwise' or 'score'")
+        selected_rank_top_k = max(1, rank_top_k or self.config.fusion.rank_top_k)
+        selected_pairwise_rank_max_pairs = max(
+            1,
+            pairwise_rank_max_pairs or self.config.fusion.pairwise_rank_max_pairs,
+        )
         use_structured_synthesis = (
             self.config.fusion.structured_synthesis
             if structured_synthesis is None
@@ -277,6 +320,10 @@ class FusionEngine:
             self_moa_samples=self_samples,
             self_moa_mode=selected_self_moa_mode,
             structured_synthesis=use_structured_synthesis,
+            ranker_provider=ranker_provider,
+            rank_top_k=selected_rank_top_k,
+            pairwise_rank_max_pairs=selected_pairwise_rank_max_pairs,
+            pairwise_rank_mode=selected_pairwise_rank_mode,
             budget=budget,
             trace=trace,
         )
@@ -367,6 +414,10 @@ class FusionEngine:
         self_moa_samples: int,
         self_moa_mode: str,
         structured_synthesis: bool,
+        ranker_provider: str | None,
+        rank_top_k: int,
+        pairwise_rank_max_pairs: int,
+        pairwise_rank_mode: str,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
@@ -418,6 +469,35 @@ class FusionEngine:
                 extra_body,
                 self_moa_samples or samples_per_provider,
                 self_moa_mode,
+                budget,
+                trace,
+            )
+        if strategy == "pairwise_rank_fuse":
+            return await self._pairwise_rank_fuse(
+                messages,
+                panel,
+                ranker_provider,
+                judge_provider,
+                temperature,
+                max_tokens,
+                extra_body,
+                samples_per_provider,
+                rank_top_k,
+                pairwise_rank_max_pairs,
+                pairwise_rank_mode,
+                structured_synthesis,
+                budget,
+                trace,
+            )
+        if strategy == "semantic_vote":
+            return await self._semantic_vote(
+                messages,
+                panel,
+                temperature,
+                max_tokens,
+                extra_body,
+                samples_per_provider,
+                vote_regex,
                 budget,
                 trace,
             )
@@ -973,6 +1053,470 @@ class FusionEngine:
             )
         best = self._deterministic_best(candidates)
         return best.content, f"Synthesis failed: {synthesis.error or 'empty response'}", synthesis
+
+    async def _pairwise_rank_fuse(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        ranker_provider: str | None,
+        judge_provider: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        samples_per_provider: int,
+        rank_top_k: int,
+        pairwise_rank_max_pairs: int,
+        pairwise_rank_mode: str,
+        structured_synthesis: bool,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        request = self._provider_request(messages, temperature, max_tokens, extra_body)
+        candidates = await self._generate_candidates(
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="rank_candidate",
+            use_panel_roles=True,
+        )
+        successes = self._successes(candidates)
+        if not successes:
+            return self._no_success_result("pairwise_rank_fuse", candidates)
+        if len(successes) == 1:
+            return FusionResult(
+                strategy="pairwise_rank_fuse",
+                final=successes[0].content,
+                judge_analysis="Only one usable candidate was available.",
+                candidates=self._visible_candidates(candidates),
+                usage=self._sum_usage(candidates),
+            )
+
+        selected_ranker = self._role_provider(
+            ranker_provider,
+            self.config.fusion.ranker_provider or self.config.fusion.judge_provider,
+            successes,
+            panel,
+        )
+        ranking = await self._rank_candidates(
+            messages,
+            successes,
+            selected_ranker,
+            pairwise_rank_mode,
+            pairwise_rank_max_pairs,
+            budget,
+            trace,
+        )
+        top_candidates = ranking.ordered[: min(rank_top_k, len(ranking.ordered))]
+        selected_fuser = self._role_provider(
+            self.config.fusion.fuser_provider,
+            judge_provider or self.config.fusion.judge_provider,
+            top_candidates,
+            panel,
+        )
+        synthesis = await self._call_synthesizer(
+            messages,
+            top_candidates,
+            selected_fuser,
+            max_tokens,
+            budget,
+            trace,
+            stage="rank_fusion",
+            structured_synthesis=structured_synthesis,
+        )
+        usage = self._sum_usage(candidates) + ranking.usage + synthesis.usage
+        outputs = {}
+        if self.config.fusion.include_workflow_outputs:
+            outputs["ranking"] = json.dumps(ranking.summary, ensure_ascii=False)
+
+        if synthesis.ok and synthesis.content.strip():
+            final, analysis, synthesis_outputs = self._finalize_synthesis_result(
+                synthesis,
+                len(top_candidates),
+                structured_synthesis,
+                plain_success=f"Fused top {len(top_candidates)} ranked candidate(s).",
+                structured_success=(
+                    f"Structured fusion parsed top {len(top_candidates)} ranked candidate(s)."
+                ),
+            )
+            outputs.update(synthesis_outputs)
+        else:
+            final = top_candidates[0].content
+            analysis = f"Rank fusion failed: {synthesis.error or 'empty response'}"
+
+        if not ranking.parsed:
+            analysis = f"Ranking parse failed; used candidate order. {analysis}"
+
+        return FusionResult(
+            strategy="pairwise_rank_fuse",
+            final=final,
+            judge_provider=selected_fuser,
+            judge_analysis=analysis,
+            candidates=self._visible_candidates(candidates),
+            usage=usage,
+            workflow_outputs=outputs,
+        )
+
+    async def _rank_candidates(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        ranker_provider: str,
+        mode: str,
+        max_pairs: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> RankingResult:
+        if mode == "score":
+            return await self._score_rank_candidates(
+                messages,
+                candidates,
+                ranker_provider,
+                budget,
+                trace,
+            )
+        return await self._pairwise_rank_candidates(
+            messages,
+            candidates,
+            ranker_provider,
+            max_pairs,
+            budget,
+            trace,
+        )
+
+    async def _score_rank_candidates(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        ranker_provider: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> RankingResult:
+        request = ProviderRequest(
+            messages=[
+                ChatMessage(role="system", content=RANKER_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=self._build_score_ranking_prompt(messages, candidates),
+                ),
+            ],
+            temperature=0.0,
+            max_tokens=700,
+        )
+        ranking_call = await self._call_provider(
+            ranker_provider,
+            request,
+            asyncio.Semaphore(1),
+            budget,
+            trace,
+            stage="score_ranking",
+            sample_index=1,
+        )
+        usage = ranking_call.usage
+        scores = self._parse_score_ranking(ranking_call.content, len(candidates)) if ranking_call.ok else None
+        if scores is None:
+            summary = {"mode": "score", "parsed": False, "scores": []}
+            self._append_ranking_summary(trace, ranker_provider, summary)
+            return RankingResult(candidates, usage, summary, parsed=False)
+
+        ordered_indexes = sorted(range(len(candidates)), key=lambda index: scores[index], reverse=True)
+        summary = {
+            "mode": "score",
+            "parsed": True,
+            "scores": [
+                {"candidate": index + 1, "score": scores[index]} for index in ordered_indexes
+            ],
+        }
+        self._append_ranking_summary(trace, ranker_provider, summary)
+        return RankingResult(
+            [candidates[index] for index in ordered_indexes],
+            usage,
+            summary,
+            parsed=True,
+        )
+
+    async def _pairwise_rank_candidates(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        ranker_provider: str,
+        max_pairs: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> RankingResult:
+        wins = [0 for _ in candidates]
+        compared = 0
+        parsed_any = False
+        usage = Usage()
+        pair_summaries: list[dict[str, Any]] = []
+        pairs = [
+            (left, right)
+            for left in range(len(candidates))
+            for right in range(left + 1, len(candidates))
+        ][: max(0, max_pairs)]
+        for pair_index, (left, right) in enumerate(pairs, start=1):
+            if budget.remaining <= 0:
+                break
+            request = ProviderRequest(
+                messages=[
+                    ChatMessage(role="system", content=PAIRWISE_RANKER_SYSTEM_PROMPT),
+                    ChatMessage(
+                        role="user",
+                        content=self._build_pairwise_ranking_prompt(
+                            messages,
+                            candidates[left],
+                            candidates[right],
+                        ),
+                    ),
+                ],
+                temperature=0.0,
+                max_tokens=220,
+            )
+            result = await self._call_provider(
+                ranker_provider,
+                request,
+                asyncio.Semaphore(1),
+                budget,
+                trace,
+                stage="pairwise_ranking",
+                sample_index=pair_index,
+            )
+            usage += result.usage
+            if not result.ok:
+                continue
+            winner = self._parse_pairwise_winner(result.content)
+            if winner is None:
+                continue
+            parsed_any = True
+            compared += 1
+            winner_index = left if winner == 1 else right
+            wins[winner_index] += 1
+            pair_summaries.append(
+                {"pair": [left + 1, right + 1], "winner": winner_index + 1}
+            )
+
+        if not parsed_any:
+            summary = {
+                "mode": "pairwise",
+                "parsed": False,
+                "max_pairs": max_pairs,
+                "pairs_compared": compared,
+                "wins": [],
+            }
+            self._append_ranking_summary(trace, ranker_provider, summary)
+            return RankingResult(candidates, usage, summary, parsed=False)
+
+        ordered_indexes = sorted(
+            range(len(candidates)),
+            key=lambda index: (wins[index], candidates[index].weight, len(candidates[index].content)),
+            reverse=True,
+        )
+        summary = {
+            "mode": "pairwise",
+            "parsed": True,
+            "max_pairs": max_pairs,
+            "pairs_compared": compared,
+            "wins": [{"candidate": index + 1, "wins": wins[index]} for index in ordered_indexes],
+            "pairs": pair_summaries,
+        }
+        self._append_ranking_summary(trace, ranker_provider, summary)
+        return RankingResult(
+            [candidates[index] for index in ordered_indexes],
+            usage,
+            summary,
+            parsed=True,
+        )
+
+    async def _semantic_vote(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        samples_per_provider: int,
+        vote_regex: str | None,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        request = self._provider_request(messages, temperature, max_tokens, extra_body)
+        candidates = await self._generate_candidates(
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="semantic_vote_candidate",
+        )
+        successes = self._successes(candidates)
+        if not successes:
+            return self._no_success_result("semantic_vote", candidates)
+
+        selected_equivalence = (
+            self.config.fusion.vote_equivalence_provider
+            if self.config.fusion.vote_equivalence_provider in self.providers
+            else None
+        )
+        use_llm = (
+            self.config.fusion.semantic_vote_mode == "llm_equivalence"
+            and selected_equivalence is not None
+        )
+        groups, summary, equivalence_usage = await self._semantic_vote_groups(
+            messages,
+            successes,
+            vote_regex,
+            selected_equivalence,
+            use_llm,
+            budget,
+            trace,
+        )
+
+        def score(group: list[CandidateResult]) -> tuple[int, float, int]:
+            weighted = sum(candidate.weight for candidate in group)
+            longest = max(len(candidate.content) for candidate in group)
+            return len(group), weighted, longest
+
+        winning_group = max(groups, key=score)
+        representative = self._deterministic_best(winning_group)
+        weighted_score = sum(candidate.weight for candidate in winning_group)
+        summary.update(
+            {
+                "winning_group_size": len(winning_group),
+                "weighted_score": weighted_score,
+                "usable_candidates": len(successes),
+                "groups": len(groups),
+            }
+        )
+        outputs = (
+            {"semantic_vote_summary": json.dumps(summary, ensure_ascii=False)}
+            if self.config.fusion.include_workflow_outputs
+            else {}
+        )
+        return FusionResult(
+            strategy="semantic_vote",
+            final=representative.content,
+            judge_analysis=(
+                f"Winning semantic group: {len(winning_group)}/{len(successes)} usable "
+                f"candidate(s), weighted score {weighted_score:g}."
+            ),
+            candidates=self._visible_candidates(candidates),
+            usage=self._sum_usage(candidates) + equivalence_usage,
+            workflow_outputs=outputs,
+        )
+
+    async def _semantic_vote_groups(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        vote_regex: str | None,
+        equivalence_provider: str | None,
+        use_llm: bool,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> tuple[list[list[CandidateResult]], dict[str, Any], Usage]:
+        groups: list[list[CandidateResult]] = []
+        group_keys: list[str] = []
+        comparisons = 0
+        equivalent_pairs: list[dict[str, int]] = []
+        usage = Usage()
+        max_pairs = max(1, self.config.fusion.semantic_vote_max_pairs)
+        mode = "llm_equivalence" if use_llm else "rule_only"
+
+        for candidate_index, candidate in enumerate(candidates, start=1):
+            key = self._vote_key(candidate.content, vote_regex)
+            exact_match_index = next(
+                (index for index, group_key in enumerate(group_keys) if group_key == key),
+                None,
+            )
+            if exact_match_index is not None:
+                groups[exact_match_index].append(candidate)
+                continue
+
+            matched_group: int | None = None
+            if use_llm and equivalence_provider is not None:
+                for group_index, group in enumerate(groups):
+                    if comparisons >= max_pairs or budget.remaining <= 0:
+                        break
+                    comparisons += 1
+                    equivalent, call_usage = await self._call_equivalence_provider(
+                        messages,
+                        candidate,
+                        group[0],
+                        equivalence_provider,
+                        budget,
+                        trace,
+                        comparisons,
+                    )
+                    usage += call_usage
+                    if equivalent:
+                        matched_group = group_index
+                        equivalent_pairs.append(
+                            {"candidate": candidate_index, "group": group_index + 1}
+                        )
+                        break
+
+            if matched_group is None:
+                groups.append([candidate])
+                group_keys.append(key)
+            else:
+                groups[matched_group].append(candidate)
+
+        summary = {
+            "mode": mode,
+            "equivalence_provider": equivalence_provider,
+            "max_pairs": max_pairs,
+            "pairs_compared": comparisons,
+            "equivalent_pairs": equivalent_pairs,
+        }
+        trace.append(
+            WorkflowStep(
+                stage="semantic_vote_summary",
+                provider=equivalence_provider,
+                model=(
+                    self.providers[equivalence_provider].config.model
+                    if equivalence_provider in self.providers
+                    else None
+                ),
+                status="ok",
+                note=json.dumps(summary, ensure_ascii=False)[:300],
+            )
+        )
+        return groups, summary, usage
+
+    async def _call_equivalence_provider(
+        self,
+        messages: list[ChatMessage],
+        candidate: CandidateResult,
+        representative: CandidateResult,
+        provider_name: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+        sample_index: int,
+    ) -> tuple[bool, Usage]:
+        request = ProviderRequest(
+            messages=[
+                ChatMessage(role="system", content=SEMANTIC_EQUIVALENCE_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=self._build_equivalence_prompt(messages, candidate, representative),
+                ),
+            ],
+            temperature=0.0,
+            max_tokens=80,
+        )
+        result = await self._call_provider(
+            provider_name,
+            request,
+            asyncio.Semaphore(1),
+            budget,
+            trace,
+            stage="semantic_equivalence",
+            sample_index=sample_index,
+        )
+        if not result.ok:
+            return False, result.usage
+        return self._parse_equivalence(result.content), result.usage
 
     async def _vote(
         self,
@@ -1597,6 +2141,10 @@ class FusionEngine:
             return panel_size
         if strategy in {"self_moa", "self_moa_seq"}:
             return max(1, samples_per_provider) + 1
+        if strategy == "pairwise_rank_fuse":
+            return drafts + 2
+        if strategy == "semantic_vote":
+            return drafts
         if strategy in {"parallel_synthesis", "best_of_n"}:
             return drafts + 1
         if strategy in {"majority_vote", "weighted_vote"}:
@@ -1615,7 +2163,7 @@ class FusionEngine:
     ) -> int:
         panel_size = max(1, len(panel))
         minimum_total = 1
-        if strategy in {"best_of_n", "weighted_vote"}:
+        if strategy in {"best_of_n", "weighted_vote", "semantic_vote"}:
             minimum_total = 2
         elif strategy == "majority_vote":
             minimum_total = 3
@@ -1869,7 +2417,8 @@ class FusionEngine:
                 )
         schema = {
             "strategy": "one of fallback, parallel_synthesis, self_moa, self_moa_seq, best_of_n, "
-            "majority_vote, weighted_vote, critique_revision, layered_refinement",
+            "pairwise_rank_fuse, semantic_vote, majority_vote, weighted_vote, "
+            "critique_revision, layered_refinement",
             "panel": ["enabled provider names only"],
             "judge_provider": "enabled provider name or null",
             "critic_provider": "enabled provider name or null",
@@ -1883,6 +2432,81 @@ class FusionEngine:
             f"Remaining model-call budget after planning: {remaining_calls}\n"
             f"Required JSON shape: {json.dumps(schema)}\n\n"
             f"User conversation:\n{self._conversation_transcript(messages)}"
+        )
+
+    def _build_score_ranking_prompt(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+    ) -> str:
+        parts = [
+            "Conversation transcript:",
+            self._conversation_transcript(messages),
+            "",
+            "Score each candidate from 0.0 to 1.0 and return strict JSON:",
+            '{"rankings":[{"candidate":1,"score":0.0}]}',
+            "",
+            "Candidate answers:",
+        ]
+        parts.extend(self._render_candidates(candidates))
+        return "\n".join(parts)
+
+    def _build_pairwise_ranking_prompt(
+        self,
+        messages: list[ChatMessage],
+        left: CandidateResult,
+        right: CandidateResult,
+    ) -> str:
+        parts = [
+            "Conversation transcript:",
+            self._conversation_transcript(messages),
+            "",
+            "Choose the better candidate. Return strict JSON only:",
+            '{"winner":1,"score_1":0.0,"score_2":0.0}',
+            "",
+            "Candidates:",
+        ]
+        parts.extend(self._render_candidates([left, right]))
+        return "\n".join(parts)
+
+    def _build_equivalence_prompt(
+        self,
+        messages: list[ChatMessage],
+        candidate: CandidateResult,
+        representative: CandidateResult,
+    ) -> str:
+        return "\n".join(
+            [
+                "Conversation transcript:",
+                self._conversation_transcript(messages),
+                "",
+                "Do these concise answers mean the same answer for the user's request?",
+                "Return strict JSON only: {\"equivalent\": true}",
+                "",
+                f"Answer A:\n{self._truncate_for_judge(candidate.content.strip())}",
+                "",
+                f"Answer B:\n{self._truncate_for_judge(representative.content.strip())}",
+            ]
+        )
+
+    def _append_ranking_summary(
+        self,
+        trace: list[WorkflowStep],
+        ranker_provider: str,
+        summary: dict[str, Any],
+    ) -> None:
+        trace.append(
+            WorkflowStep(
+                stage="ranking_summary",
+                provider=ranker_provider,
+                model=(
+                    self.providers[ranker_provider].config.model
+                    if ranker_provider in self.providers
+                    else None
+                ),
+                status="ok",
+                note=json.dumps(summary, ensure_ascii=False)[:300],
+            )
         )
 
     def _render_candidates(self, candidates: list[CandidateResult]) -> list[str]:
@@ -1984,6 +2608,75 @@ class FusionEngine:
         if value is None:
             return ""
         return str(value)
+
+    @staticmethod
+    def _parse_score_ranking(content: str, candidate_count: int) -> list[float] | None:
+        data = _extract_json_object(content)
+        scores: dict[int, float] = {}
+        if data is not None:
+            rankings = data.get("rankings", data.get("scores"))
+            if isinstance(rankings, list):
+                for item in rankings:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        candidate_index = int(item.get("candidate", item.get("index"))) - 1
+                        score = float(item.get("score"))
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= candidate_index < candidate_count:
+                        scores[candidate_index] = score
+            elif isinstance(rankings, dict):
+                for key, value in rankings.items():
+                    try:
+                        candidate_index = int(str(key).removeprefix("candidate_")) - 1
+                        score = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= candidate_index < candidate_count:
+                        scores[candidate_index] = score
+        if len(scores) < candidate_count:
+            for match in re.finditer(
+                r"(?:candidate\s*)?(\d+)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)",
+                content,
+                flags=re.IGNORECASE,
+            ):
+                candidate_index = int(match.group(1)) - 1
+                if 0 <= candidate_index < candidate_count:
+                    scores[candidate_index] = float(match.group(2))
+        if not scores:
+            return None
+        return [scores.get(index, 0.0) for index in range(candidate_count)]
+
+    @staticmethod
+    def _parse_pairwise_winner(content: str) -> int | None:
+        data = _extract_json_object(content)
+        if data is not None:
+            try:
+                winner = int(data.get("winner"))
+            except (TypeError, ValueError):
+                winner = 0
+            if winner in {1, 2}:
+                return winner
+        match = re.search(r"\bwinner\s*[:=]\s*([12])\b", content, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        match = re.search(r"\bcandidate\s*([12])\b", content, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+
+    @staticmethod
+    def _parse_equivalence(content: str) -> bool:
+        data = _extract_json_object(content)
+        if data is not None:
+            value = data.get("equivalent")
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.strip().casefold() in {"true", "yes", "same", "equivalent"}
+        normalized = content.strip().casefold()
+        return bool(re.search(r"\b(yes|true|same|equivalent)\b", normalized))
 
     @staticmethod
     def _parse_selection(content: str, candidate_count: int) -> tuple[int, str] | None:

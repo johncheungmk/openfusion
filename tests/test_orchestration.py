@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from openfusion.config import AppConfig, FusionConfig, PanelRoleConfig, ProviderConfig
@@ -245,6 +247,220 @@ async def test_non_structured_synthesis_still_returns_plain_judge_answer() -> No
     assert result.final == "Plain final answer."
     assert result.workflow_outputs == {}
     assert result.judge_analysis == "Synthesized 1 independent candidate(s)."
+
+
+@pytest.mark.asyncio
+async def test_pairwise_rank_fuse_parse_success() -> None:
+    ranker = QueueProvider(
+        provider_config("ranker"),
+        ['{"winner": 2}', '{"winner": 1}', '{"winner": 1}'],
+    )
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Candidate A"),
+        "b": StaticProvider(provider_config("b"), "Candidate B best"),
+        "c": StaticProvider(provider_config("c"), "Candidate C"),
+        "ranker": ranker,
+        "judge": StaticProvider(provider_config("judge"), "Fused ranked final."),
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(
+            panel=["a", "b", "c"],
+            ranker_provider="ranker",
+            judge_provider="judge",
+            rank_top_k=2,
+            pairwise_rank_max_pairs=3,
+            pairwise_rank_mode="pairwise",
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Rank and fuse")],
+        strategy="pairwise_rank_fuse",
+    )
+
+    assert result.final == "Fused ranked final."
+    assert result.strategy == "pairwise_rank_fuse"
+    assert len(ranker.requests) == 3
+    ranking = json.loads(result.workflow_outputs["ranking"])
+    assert ranking["parsed"] is True
+    assert ranking["wins"][0] == {"candidate": 2, "wins": 2}
+    assert result.trace[-2].stage == "ranking_summary"
+
+
+@pytest.mark.asyncio
+async def test_pairwise_rank_fuse_parse_failure_falls_back_to_candidate_order() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Candidate A"),
+        "b": StaticProvider(provider_config("b"), "Candidate B"),
+        "ranker": StaticProvider(provider_config("ranker"), "not parseable"),
+        "judge": StaticProvider(provider_config("judge"), "Fused fallback final."),
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(
+            panel=["a", "b"],
+            ranker_provider="ranker",
+            judge_provider="judge",
+            rank_top_k=2,
+            pairwise_rank_mode="score",
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Rank and fuse")],
+        strategy="pairwise_rank_fuse",
+    )
+
+    assert result.final == "Fused fallback final."
+    assert result.judge_analysis.startswith("Ranking parse failed; used candidate order.")
+    ranking = json.loads(result.workflow_outputs["ranking"])
+    assert ranking["parsed"] is False
+
+
+@pytest.mark.asyncio
+async def test_pairwise_rank_fuse_respects_max_pair_limit() -> None:
+    ranker = QueueProvider(
+        provider_config("ranker"),
+        ['{"winner": 1}', '{"winner": 1}', '{"winner": 1}'],
+    )
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Candidate A"),
+        "b": StaticProvider(provider_config("b"), "Candidate B"),
+        "c": StaticProvider(provider_config("c"), "Candidate C"),
+        "ranker": ranker,
+        "judge": StaticProvider(provider_config("judge"), "Fused top."),
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(
+            panel=["a", "b", "c"],
+            ranker_provider="ranker",
+            judge_provider="judge",
+            pairwise_rank_mode="pairwise",
+            pairwise_rank_max_pairs=1,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Rank")],
+        strategy="pairwise_rank_fuse",
+    )
+
+    assert len(ranker.requests) == 1
+    ranking = json.loads(result.workflow_outputs["ranking"])
+    assert ranking["pairs_compared"] == 1
+    assert ranking["max_pairs"] == 1
+
+
+@pytest.mark.asyncio
+async def test_semantic_vote_groups_equivalent_answers_with_llm() -> None:
+    equivalence = QueueProvider(provider_config("equiv"), ['{"equivalent": true}', "yes"])
+    providers = {
+        "a": StaticProvider(provider_config("a"), "4"),
+        "b": StaticProvider(provider_config("b"), "four"),
+        "c": StaticProvider(provider_config("c"), "the answer is 4"),
+        "equiv": equivalence,
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(
+            panel=["a", "b", "c"],
+            vote_equivalence_provider="equiv",
+            semantic_vote_mode="llm_equivalence",
+            semantic_vote_max_pairs=4,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="What is 2+2?")],
+        strategy="semantic_vote",
+    )
+
+    assert result.final == "the answer is 4"
+    assert len(equivalence.requests) == 2
+    summary = json.loads(result.workflow_outputs["semantic_vote_summary"])
+    assert summary["winning_group_size"] == 3
+    assert summary["pairs_compared"] == 2
+
+
+@pytest.mark.asyncio
+async def test_semantic_vote_respects_max_total_calls() -> None:
+    equivalence = QueueProvider(provider_config("equiv"), ['{"equivalent": true}'])
+    providers = {
+        "a": StaticProvider(provider_config("a"), "4"),
+        "b": StaticProvider(provider_config("b"), "four"),
+        "c": StaticProvider(provider_config("c"), "the answer is 4"),
+        "equiv": equivalence,
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(
+            panel=["a", "b", "c"],
+            vote_equivalence_provider="equiv",
+            semantic_vote_mode="llm_equivalence",
+            max_total_calls=3,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="What is 2+2?")],
+        strategy="semantic_vote",
+        max_total_calls=3,
+    )
+
+    assert len(equivalence.requests) == 0
+    assert len(result.candidates) == 3
+    assert "pairs_compared" in (result.trace[-1].note or "")
+
+
+@pytest.mark.asyncio
+async def test_semantic_vote_falls_back_to_exact_voting_without_equivalence_provider() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Answer: yes"),
+        "b": StaticProvider(provider_config("b"), "Answer: yes"),
+        "c": StaticProvider(provider_config("c"), "Answer: no"),
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(panel=["a", "b", "c"], semantic_vote_mode="llm_equivalence"),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="yes or no")],
+        strategy="semantic_vote",
+    )
+
+    assert result.final == "Answer: yes"
+    summary = json.loads(result.workflow_outputs["semantic_vote_summary"])
+    assert summary["mode"] == "rule_only"
+    assert summary["groups"] == 2
+
+
+@pytest.mark.asyncio
+async def test_pairwise_rank_fuse_candidate_outputs_are_redacted() -> None:
+    providers = {
+        "a": StaticProvider(provider_config("a"), "Secret candidate."),
+        "ranker": StaticProvider(provider_config("ranker"), "not parseable"),
+        "judge": StaticProvider(provider_config("judge"), "Final."),
+    }
+    config = AppConfig(
+        providers=[provider_config(name) for name in providers],
+        fusion=FusionConfig(
+            panel=["a"],
+            ranker_provider="ranker",
+            judge_provider="judge",
+            include_candidate_outputs=False,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Rank")],
+        strategy="pairwise_rank_fuse",
+    )
+
+    assert result.final == "Secret candidate."
+    assert result.candidates[0].content == ""
 
 
 @pytest.mark.asyncio

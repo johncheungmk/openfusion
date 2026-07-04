@@ -14,6 +14,10 @@ or claims to reproduce proprietary orchestrators.
   unchanged or synthesizes a new final answer.
 - `self_moa_seq`: batches Self-MoA samples and carries forward a running best or fused
   answer for larger sample counts or long candidates.
+- `pairwise_rank_fuse`: generates panel candidates, ranks them with a ranker provider,
+  then fuses the top candidates.
+- `semantic_vote`: groups concise answers by exact normalized text or bounded LLM
+  equivalence checks before voting.
 
 ## Self-MoA configuration
 
@@ -31,6 +35,14 @@ fusion:
   self_moa_mode: synthesize  # select or synthesize
   self_moa_batch_size: 4
   self_moa_seq_carry_max_chars: 12000
+  ranker_provider: local-ollama
+  fuser_provider: local-ollama
+  rank_top_k: 3
+  pairwise_rank_max_pairs: 12
+  pairwise_rank_mode: pairwise
+  vote_equivalence_provider: local-ollama
+  semantic_vote_max_pairs: 12
+  semantic_vote_mode: rule_only
   max_total_calls: 8
 ```
 
@@ -64,3 +76,20 @@ parseable public sections:
 OpenFusion parses `final_answer` as the user-facing answer and stores the public
 sections in `workflow_outputs` when `include_workflow_outputs` is enabled. If the
 model returns invalid structure, OpenFusion degrades to the plain synthesized text.
+
+## Pairwise rank fuse
+
+`pairwise_rank_fuse` is useful when candidate answers are long enough that direct
+voting is brittle. In `pairwise` mode, OpenFusion compares candidate pairs up to
+`pairwise_rank_max_pairs` and records public win counts. In `score` mode, it asks
+the ranker for parseable JSON scores in one call. If parsing fails, the original
+candidate order is used and synthesis still runs over the top candidates.
+
+## Semantic voting
+
+`semantic_vote` is intended for concise answers that may use different wording, such
+as `4`, `four`, and `the answer is 4`. `rule_only` matches the existing normalized
+exact voting behavior. `llm_equivalence` asks `vote_equivalence_provider` whether
+answers are equivalent, but stops at `semantic_vote_max_pairs` and the remaining
+`max_total_calls` budget. If no equivalence provider is configured, it falls back
+to rule-only grouping.

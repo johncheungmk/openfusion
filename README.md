@@ -494,9 +494,22 @@ openfusion evaluate examples/eval_sample.jsonl \
   --config openfusion.yaml \
   --strategy weighted_vote \
   --output evaluation-report.json
+
+openfusion evaluate examples/eval_moa_sample.jsonl \
+  --config openfusion.yaml \
+  --compare-strategies fallback,self_moa,parallel_synthesis \
+  --max-total-calls 6 \
+  --output comparison-report.json
 ```
 
-The built-in evaluator is intentionally simple exact match. Add domain-specific graders before publishing performance claims.
+Reports include accuracy, win/tie/loss rates versus the fallback baseline, call
+counts, latency percentiles, token totals, cost placeholder, accuracy per call,
+accuracy per 1k tokens, and strategy failures.
+
+The default grader is exact match. Optional `--grader llm_pairwise` and
+`--grader llm_rubric --grader-provider PROVIDER` are useful for qualitative
+inspection, but LLM judge results are not ground truth. Treat them as noisy model
+outputs and validate important claims with task-specific graders or human review.
 
 ## Response metadata
 

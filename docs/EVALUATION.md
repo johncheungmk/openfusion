@@ -47,7 +47,54 @@ openfusion evaluate examples/eval_sample.jsonl \
   --config examples/uncertainty_cascade.yaml \
   --strategy uncertainty_cascade \
   --output uncertainty-cascade.json
+
+openfusion evaluate examples/eval_moa_sample.jsonl \
+  --config openfusion.yaml \
+  --compare-strategies fallback,self_moa,parallel_synthesis \
+  --max-total-calls 6 \
+  --output equal-budget-comparison.json
 ```
+
+`--compare-strategies` enforces the same `--max-total-calls` for every listed
+strategy. The report always includes a fallback baseline, and includes `self_moa`
+when a Self-MoA provider is configured.
+
+## Graders
+
+The default grader is `exact_match`. `regex` applies each case's `answer_regex`
+before matching. Optional LLM graders are available:
+
+```bash
+openfusion evaluate examples/eval_moa_sample.jsonl \
+  --config openfusion.yaml \
+  --compare-strategies fallback,parallel_synthesis \
+  --grader llm_pairwise \
+  --grader-provider local-ollama
+
+openfusion evaluate examples/eval_moa_sample.jsonl \
+  --config openfusion.yaml \
+  --strategy parallel_synthesis \
+  --grader llm_rubric \
+  --grader-provider local-ollama
+```
+
+LLM judge scores are not ground truth. They are model outputs and can be biased,
+inconsistent, or contaminated by prompt wording. Use them for triage, then verify
+important claims with deterministic task graders, executable tests, citation checks,
+or blinded human review.
+
+## Metrics
+
+Reports include:
+
+- `total_examples`, `accuracy`, and per-case results;
+- win, tie, and loss rates versus the fallback baseline in compare mode;
+- total and average model calls per example;
+- total, average, p50, and p95 latency in milliseconds;
+- prompt, completion, and total token counts;
+- `estimated_cost` when cost configuration is added by deployments;
+- `accuracy_per_call` and `accuracy_per_1k_tokens`;
+- `strategy_failures`.
 
 Compare at least:
 
@@ -65,3 +112,10 @@ wording. Use `pairwise_rank_fuse` for open-ended answers where ranked top-candid
 synthesis is more appropriate than exact voting.
 Use `uncertainty_cascade` when cost and latency matter and a cheaper provider can
 often answer confidently enough without escalation.
+
+## Contamination
+
+OpenFusion evaluation does not implement web search. If a future deployment enables
+web tools or retrieval during evaluation, document excluded domains and blocked
+domains before running benchmarks. Evaluation sets should not be fetched, searched,
+or leaked to tools that can reveal labels or memorized benchmark pages.

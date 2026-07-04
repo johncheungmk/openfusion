@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import load_config, write_example_config
-from .evaluation import evaluate_cases, load_jsonl
+from .evaluation import compare_strategies, evaluate_cases, load_jsonl
 from .fusion import FusionEngine
 from .schema import ChatMessage
 from .server import create_app
@@ -192,33 +192,66 @@ def evaluate(
     dataset: str = typer.Argument(..., help="JSONL evaluation dataset."),
     config: str = typer.Option("openfusion.yaml", help="Path to config YAML."),
     strategy: str = typer.Option("fallback", help="Strategy to evaluate."),
+    compare_strategies_option: str | None = typer.Option(
+        None,
+        "--compare-strategies",
+        help="Comma-separated strategies to evaluate with the same call budget.",
+    ),
     panel: str | None = typer.Option(None, help="Comma-separated provider names."),
     judge: str | None = typer.Option(None, help="Judge/selector provider."),
+    grader: str = typer.Option(
+        "exact_match",
+        help="Grader: exact_match, regex, llm_pairwise, or llm_rubric.",
+    ),
+    grader_provider: str | None = typer.Option(None, help="Provider used by LLM graders."),
     max_tokens: int | None = typer.Option(None, help="Maximum generated tokens per call."),
     max_total_calls: int | None = typer.Option(None, help="Per-case model-call budget."),
     output: str | None = typer.Option(None, help="Optional JSON report path."),
 ) -> None:
-    """Run an exact-match JSONL evaluation without claiming benchmark gains in advance."""
+    """Run JSONL evaluation without claiming benchmark gains in advance."""
     cfg = load_config(config)
     engine = FusionEngine(cfg)
     cases = load_jsonl(dataset)
 
     async def _run() -> None:
         try:
-            summary = await evaluate_cases(
-                engine=engine,
-                cases=cases,
-                strategy=strategy,
-                panel=_panel_names(panel),
-                judge_provider=judge,
-                max_tokens=max_tokens,
-                max_total_calls=max_total_calls,
-            )
-            console.print(
-                f"[bold]Accuracy[/bold]: {summary.correct}/{summary.total} "
-                f"({summary.accuracy:.1%})"
-            )
-            report = summary.model_dump_json(indent=2)
+            if grader not in {"exact_match", "regex", "llm_pairwise", "llm_rubric"}:
+                raise typer.BadParameter(
+                    "grader must be exact_match, regex, llm_pairwise, or llm_rubric"
+                )
+            if compare_strategies_option:
+                report_model = await compare_strategies(
+                    engine=engine,
+                    cases=cases,
+                    strategies=_panel_names(compare_strategies_option) or [],
+                    panel=_panel_names(panel),
+                    judge_provider=judge,
+                    max_tokens=max_tokens,
+                    max_total_calls=max_total_calls,
+                    grader=grader,  # type: ignore[arg-type]
+                    grader_provider=grader_provider,
+                )
+                console.print(
+                    f"[bold]Compared[/bold] {len(report_model.summaries)} strategies "
+                    f"with baseline {report_model.baseline_strategy}"
+                )
+            else:
+                report_model = await evaluate_cases(
+                    engine=engine,
+                    cases=cases,
+                    strategy=strategy,
+                    panel=_panel_names(panel),
+                    judge_provider=judge,
+                    max_tokens=max_tokens,
+                    max_total_calls=max_total_calls,
+                    grader=grader,  # type: ignore[arg-type]
+                    grader_provider=grader_provider,
+                )
+                console.print(
+                    f"[bold]Accuracy[/bold]: {report_model.correct}/{report_model.total} "
+                    f"({report_model.accuracy:.1%})"
+                )
+            report = report_model.model_dump_json(indent=2)
             if output:
                 Path(output).write_text(report, encoding="utf-8")
                 console.print(f"[green]Wrote[/green] {output}")

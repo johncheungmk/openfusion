@@ -112,3 +112,18 @@ and escalate when normalized answers disagree.
 Escalation reasons are public operational metadata: provider failure, low confidence,
 sample disagreement, invalid response format, exhausted provider steps, or exhausted
 call budget. The trace does not include hidden chain-of-thought.
+
+## Evaluation
+
+Compare MoA-style workflows at equal budgets. For example:
+
+```bash
+openfusion evaluate examples/eval_moa_sample.jsonl \
+  --config openfusion.yaml \
+  --compare-strategies fallback,self_moa,parallel_synthesis,pairwise_rank_fuse \
+  --max-total-calls 6 \
+  --output moa-eval.json
+```
+
+Optional LLM graders can help inspect open-ended outputs, but they are not ground
+truth and should not replace deterministic or human evaluation for published claims.

@@ -1,0 +1,3 @@
+{"id":"math-concise","prompt":"Return only the answer: 17 + 25","reference":"42"}
+{"id":"mcq-safety","prompt":"Final answer only. A) retry forever B) cap retries and surface errors","reference":"B","answer_regex":"(?:Final answer|Answer):\\s*([A-B])"}
+{"id":"architecture","prompt":"In three bullets, compare fallback routing and parallel synthesis for a small RAG service.","reference":"parallel synthesis combines independent drafts","rubric":"The answer should mention latency/cost tradeoffs and that parallel synthesis combines independent drafts."}

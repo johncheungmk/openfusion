@@ -25,6 +25,7 @@ STRATEGY_HELP = {
     "self_moa_seq": "Sequential batched Self-MoA with carry-forward aggregation.",
     "pairwise_rank_fuse": "Rank candidates by pairwise/score judging, then fuse top answers.",
     "semantic_vote": "Group concise semantically equivalent answers before voting.",
+    "uncertainty_cascade": "Start cheap and escalate on low confidence, disagreement, or failure.",
     "best_of_n": "Generate alternatives and select the strongest unchanged answer.",
     "majority_vote": "Exact/regex-normalized consensus by vote count.",
     "weighted_vote": "Exact/regex-normalized consensus using provider weights.",

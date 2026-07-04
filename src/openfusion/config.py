@@ -71,6 +71,7 @@ class FusionConfig(BaseModel):
     ranker_provider: str | None = None
     fuser_provider: str | None = None
     vote_equivalence_provider: str | None = None
+    cascade_providers: list[str] = Field(default_factory=list)
 
     max_parallel: int = 4
     max_total_calls: int = 12
@@ -82,6 +83,8 @@ class FusionConfig(BaseModel):
     rank_top_k: int = 3
     pairwise_rank_max_pairs: int = 12
     semantic_vote_max_pairs: int = 12
+    cascade_consistency_samples: int = 1
+    cascade_max_steps: int = 3
 
     temperature: float = 0.2
     judge_temperature: float = 0.1
@@ -91,6 +94,8 @@ class FusionConfig(BaseModel):
     self_moa_mode: Literal["select", "synthesize"] = "synthesize"
     pairwise_rank_mode: Literal["pairwise", "score"] = "pairwise"
     semantic_vote_mode: Literal["rule_only", "llm_equivalence"] = "rule_only"
+    cascade_confidence_threshold: float = 0.75
+    cascade_escalate_on_disagreement: bool = True
 
     require_at_least_successes: int = 1
     include_candidate_outputs: bool = True
@@ -114,6 +119,8 @@ class FusionConfig(BaseModel):
         "rank_top_k",
         "pairwise_rank_max_pairs",
         "semantic_vote_max_pairs",
+        "cascade_consistency_samples",
+        "cascade_max_steps",
         "require_at_least_successes",
         "judge_candidate_max_chars",
         "transcript_max_chars",
@@ -129,6 +136,13 @@ class FusionConfig(BaseModel):
     def require_nonnegative_rounds(cls, value: int) -> int:
         if value < 0:
             raise ValueError("must be at least 0")
+        return value
+
+    @field_validator("cascade_confidence_threshold")
+    @classmethod
+    def require_probability(cls, value: float) -> float:
+        if value < 0 or value > 1:
+            raise ValueError("must be between 0 and 1")
         return value
 
 
@@ -163,6 +177,13 @@ class AppConfig(BaseModel):
         missing_panel = [name for name in self.fusion.panel if name not in known_names]
         if missing_panel:
             raise ValueError(f"Fusion panel references unknown providers: {', '.join(missing_panel)}")
+        missing_cascade = [
+            name for name in self.fusion.cascade_providers if name not in known_names
+        ]
+        if missing_cascade:
+            raise ValueError(
+                f"Cascade providers reference unknown providers: {', '.join(missing_cascade)}"
+            )
 
         role_references = {
             "Judge": self.fusion.judge_provider,
@@ -233,6 +254,11 @@ def write_example_config(path: str | Path) -> None:
             "pairwise_rank_mode": "pairwise",
             "semantic_vote_max_pairs": 12,
             "semantic_vote_mode": "rule_only",
+            "cascade_providers": ["local-ollama"],
+            "cascade_confidence_threshold": 0.75,
+            "cascade_consistency_samples": 1,
+            "cascade_escalate_on_disagreement": True,
+            "cascade_max_steps": 3,
             "structured_synthesis": False,
             "max_tokens": 256,
         },

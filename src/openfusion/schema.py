@@ -136,6 +136,9 @@ class OpenAIChatCompletionRequest(BaseModel):
     fusion_rank_top_k: int | None = None
     fusion_pairwise_rank_max_pairs: int | None = None
     fusion_pairwise_rank_mode: Literal["pairwise", "score"] | None = None
+    fusion_cascade_providers: list[str] | None = None
+    fusion_cascade_confidence_threshold: float | None = None
+    fusion_cascade_consistency_samples: int | None = None
 
     def effective_max_tokens(self) -> int | None:
         if self.max_completion_tokens is not None:

@@ -18,6 +18,8 @@ or claims to reproduce proprietary orchestrators.
   then fuses the top candidates.
 - `semantic_vote`: groups concise answers by exact normalized text or bounded LLM
   equivalence checks before voting.
+- `uncertainty_cascade`: starts with cheaper providers and escalates only when
+  confidence, consistency, format, or provider health requires it.
 
 ## Self-MoA configuration
 
@@ -43,6 +45,11 @@ fusion:
   vote_equivalence_provider: local-ollama
   semantic_vote_max_pairs: 12
   semantic_vote_mode: rule_only
+  cascade_providers: [local-ollama]
+  cascade_confidence_threshold: 0.75
+  cascade_consistency_samples: 1
+  cascade_escalate_on_disagreement: true
+  cascade_max_steps: 3
   max_total_calls: 8
 ```
 
@@ -93,3 +100,15 @@ exact voting behavior. `llm_equivalence` asks `vote_equivalence_provider` whethe
 answers are equivalent, but stops at `semantic_vote_max_pairs` and the remaining
 `max_total_calls` budget. If no equivalence provider is configured, it falls back
 to rule-only grouping.
+
+## Uncertainty cascade
+
+`uncertainty_cascade` is intended for cost-saving routing. It starts with the first
+configured cascade provider and accepts an answer when the provider returns a
+parseable public confidence score at or above `cascade_confidence_threshold`.
+With `cascade_consistency_samples: 2`, it can also sample the same provider twice
+and escalate when normalized answers disagree.
+
+Escalation reasons are public operational metadata: provider failure, low confidence,
+sample disagreement, invalid response format, exhausted provider steps, or exhausted
+call budget. The trace does not include hidden chain-of-thought.

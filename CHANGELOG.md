@@ -8,6 +8,7 @@
 - Added role-diverse panel prompts via `fusion.panel_roles`.
 - Added optional structured synthesis sections via `fusion.structured_synthesis` and `fusion_structured_synthesis`.
 - Added `pairwise_rank_fuse` and `semantic_vote` strategies with model IDs.
+- Added `uncertainty_cascade` for confidence and consistency based escalation.
 - Preserved `panel_judge` as a backward-compatible alias for `parallel_synthesis`.
 
 ## 0.2.1

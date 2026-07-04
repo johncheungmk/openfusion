@@ -42,6 +42,11 @@ openfusion evaluate examples/eval_sample.jsonl \
   --config examples/moa_pairwise_rank_fuse.yaml \
   --strategy pairwise_rank_fuse \
   --output pairwise-rank-fuse.json
+
+openfusion evaluate examples/eval_sample.jsonl \
+  --config examples/uncertainty_cascade.yaml \
+  --strategy uncertainty_cascade \
+  --output uncertainty-cascade.json
 ```
 
 Compare at least:
@@ -58,3 +63,5 @@ The built-in score is normalized exact match. Use a domain-specific test executo
 Use `semantic_vote` for concise answers that may be equivalent despite different
 wording. Use `pairwise_rank_fuse` for open-ended answers where ranked top-candidate
 synthesis is more appropriate than exact voting.
+Use `uncertainty_cascade` when cost and latency matter and a cheaper provider can
+often answer confidently enough without escalation.

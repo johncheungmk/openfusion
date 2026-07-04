@@ -14,6 +14,7 @@ OpenFusion is **not** weight-level model merging, and v0.4 is **not** a trained 
 
 - First-class Self-MoA strategies using repeated samples from one provider.
 - Role-diverse panel prompts and optional structured synthesis analysis.
+- Uncertainty-based cascading for confidence-aware cost control.
 - Independent best-of-N sampling and selection.
 - Majority and provider-weighted consensus voting.
 - Generative parallel synthesis; legacy `panel_judge` remains an alias.
@@ -57,6 +58,7 @@ OpenFusion can also call providers directly without LiteLLM.
 | `self_moa_seq` | Batched Self-MoA with a running selected or fused answer. | bounded by budget |
 | `pairwise_rank_fuse` | Rank panel candidates by pairwise or score judging, then fuse top answers. | drafts + rank calls + 1 |
 | `semantic_vote` | Group concise exact or semantically equivalent answers before voting. | candidates + optional equivalence |
+| `uncertainty_cascade` | Start cheap and escalate on failure, low confidence, disagreement, or invalid format. | bounded by steps |
 | `best_of_n` | Generate alternatives and select one unchanged answer. | candidates + 1 |
 | `majority_vote` | Normalize concise answers and choose the largest exact consensus group. | candidates |
 | `weighted_vote` | As above, but sum provider weights. | candidates |
@@ -164,6 +166,7 @@ fusion:
   ranker_provider:
   fuser_provider:
   vote_equivalence_provider:
+  cascade_providers: [local-ollama]
 
   max_parallel: 2
   max_total_calls: 8
@@ -175,6 +178,8 @@ fusion:
   rank_top_k: 3
   pairwise_rank_max_pairs: 12
   semantic_vote_max_pairs: 12
+  cascade_consistency_samples: 1
+  cascade_max_steps: 3
 
   temperature: 0.2
   judge_temperature: 0.1
@@ -183,6 +188,8 @@ fusion:
   self_moa_mode: synthesize
   pairwise_rank_mode: pairwise
   semantic_vote_mode: rule_only
+  cascade_confidence_threshold: 0.75
+  cascade_escalate_on_disagreement: true
   max_tokens: 256
 
   require_at_least_successes: 1
@@ -355,6 +362,7 @@ openfusion/self-moa
 openfusion/self-moa-seq
 openfusion/pairwise-rank-fuse
 openfusion/semantic-vote
+openfusion/uncertainty-cascade
 openfusion/critique-revision
 openfusion/layered-refinement
 openfusion/best-of-n
@@ -431,6 +439,19 @@ exact voting. `llm_equivalence` asks `vote_equivalence_provider` whether concise
 answers are semantically the same, capped by `semantic_vote_max_pairs` and
 `max_total_calls`. Without an equivalence provider, it falls back to rule-only
 grouping.
+
+## Uncertainty Cascade
+
+`openfusion/uncertainty-cascade` starts with `fusion.cascade_providers[0]`, or the
+first panel provider when no cascade list is configured. Each provider returns a
+concise answer plus a public confidence score. OpenFusion escalates to the next
+provider on provider failure, confidence below `cascade_confidence_threshold`,
+sample disagreement when `cascade_consistency_samples` is greater than one, or
+invalid response format.
+
+The cascade is bounded by `cascade_max_steps` and `max_total_calls`. Public trace
+entries show the provider attempted, confidence, disagreement status, and escalation
+reason without hidden chain-of-thought.
 
 ## Python OpenAI SDK
 

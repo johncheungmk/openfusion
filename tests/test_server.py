@@ -36,6 +36,7 @@ def test_health_and_models() -> None:
     assert "openfusion/self-moa-seq" in model_ids
     assert "openfusion/pairwise-rank-fuse" in model_ids
     assert "openfusion/semantic-vote" in model_ids
+    assert "openfusion/uncertainty-cascade" in model_ids
     assert "openfusion/critique-revision" in model_ids
     assert "openfusion/adaptive" in model_ids
     assert "openfusion/fallback" in model_ids

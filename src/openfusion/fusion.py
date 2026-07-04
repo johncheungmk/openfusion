@@ -83,6 +83,12 @@ differences such as numerals versus words. Do not expose hidden chain-of-thought
 JSON only: {"equivalent": true}
 """
 
+CASCADE_SYSTEM_PROMPT = """You are OpenFusion's uncertainty-cascade responder.
+Answer concisely and provide a public confidence score for your answer. Return strict JSON only:
+{"answer": "concise user-facing answer", "confidence": 0.0}
+Do not expose hidden chain-of-thought or private reasoning.
+"""
+
 SUPPORTED_STRATEGIES = (
     "fallback",
     "parallel_synthesis",
@@ -90,6 +96,7 @@ SUPPORTED_STRATEGIES = (
     "self_moa_seq",
     "pairwise_rank_fuse",
     "semantic_vote",
+    "uncertainty_cascade",
     "best_of_n",
     "majority_vote",
     "weighted_vote",
@@ -111,6 +118,7 @@ STRATEGY_ALIASES = {
     "pairwise-rank-fuse": "pairwise_rank_fuse",
     "rank-fuse": "pairwise_rank_fuse",
     "semantic-vote": "semantic_vote",
+    "uncertainty-cascade": "uncertainty_cascade",
     "best-of-n": "best_of_n",
     "majority-vote": "majority_vote",
     "weighted-vote": "weighted_vote",
@@ -244,6 +252,9 @@ class FusionEngine:
         rank_top_k: int | None = None,
         pairwise_rank_max_pairs: int | None = None,
         pairwise_rank_mode: str | None = None,
+        cascade_providers: Iterable[str] | None = None,
+        cascade_confidence_threshold: float | None = None,
+        cascade_consistency_samples: int | None = None,
     ) -> FusionResult:
         selected_strategy = canonical_strategy(strategy or self.config.fusion.default_strategy)
         panel_names = self._panel_names(panel)
@@ -261,6 +272,18 @@ class FusionEngine:
         selected_pairwise_rank_max_pairs = max(
             1,
             pairwise_rank_max_pairs or self.config.fusion.pairwise_rank_max_pairs,
+        )
+        selected_cascade_providers = self._cascade_provider_names(cascade_providers, panel_names)
+        selected_cascade_threshold = (
+            self.config.fusion.cascade_confidence_threshold
+            if cascade_confidence_threshold is None
+            else cascade_confidence_threshold
+        )
+        if selected_cascade_threshold < 0 or selected_cascade_threshold > 1:
+            raise ValueError("cascade_confidence_threshold must be between 0 and 1")
+        selected_cascade_samples = max(
+            1,
+            cascade_consistency_samples or self.config.fusion.cascade_consistency_samples,
         )
         use_structured_synthesis = (
             self.config.fusion.structured_synthesis
@@ -324,6 +347,9 @@ class FusionEngine:
             rank_top_k=selected_rank_top_k,
             pairwise_rank_max_pairs=selected_pairwise_rank_max_pairs,
             pairwise_rank_mode=selected_pairwise_rank_mode,
+            cascade_providers=selected_cascade_providers,
+            cascade_confidence_threshold=selected_cascade_threshold,
+            cascade_consistency_samples=selected_cascade_samples,
             budget=budget,
             trace=trace,
         )
@@ -418,6 +444,9 @@ class FusionEngine:
         rank_top_k: int,
         pairwise_rank_max_pairs: int,
         pairwise_rank_mode: str,
+        cascade_providers: list[str],
+        cascade_confidence_threshold: float,
+        cascade_consistency_samples: int,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
@@ -498,6 +527,18 @@ class FusionEngine:
                 extra_body,
                 samples_per_provider,
                 vote_regex,
+                budget,
+                trace,
+            )
+        if strategy == "uncertainty_cascade":
+            return await self._uncertainty_cascade(
+                messages,
+                cascade_providers,
+                temperature,
+                max_tokens,
+                extra_body,
+                cascade_confidence_threshold,
+                cascade_consistency_samples,
                 budget,
                 trace,
             )
@@ -1518,6 +1559,96 @@ class FusionEngine:
             return False, result.usage
         return self._parse_equivalence(result.content), result.usage
 
+    async def _uncertainty_cascade(
+        self,
+        messages: list[ChatMessage],
+        cascade_providers: list[str],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        confidence_threshold: float,
+        consistency_samples: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        candidates: list[CandidateResult] = []
+        max_steps = min(max(1, self.config.fusion.cascade_max_steps), len(cascade_providers))
+        last_usable: CandidateResult | None = None
+        for step_index, provider_name in enumerate(cascade_providers[:max_steps], start=1):
+            if budget.remaining <= 0:
+                break
+            provider_results: list[CandidateResult] = []
+            requested_samples = max(1, consistency_samples)
+            for sample_index in range(1, requested_samples + 1):
+                if budget.remaining <= 0:
+                    break
+                request = self._cascade_request(messages, temperature, max_tokens, extra_body)
+                if requested_samples > 1:
+                    request = request.model_copy(
+                        update={
+                            "messages": self._sampling_messages(request.messages, sample_index),
+                        },
+                        deep=True,
+                    )
+                result = await self._call_provider(
+                    provider_name,
+                    request,
+                    asyncio.Semaphore(1),
+                    budget,
+                    trace,
+                    stage="cascade_attempt",
+                    sample_index=sample_index,
+                )
+                parsed_answer, confidence = self._parse_cascade_response(result.content)
+                metadata = dict(result.metadata)
+                if parsed_answer is not None:
+                    metadata["confidence"] = confidence
+                    result = result.model_copy(
+                        update={"content": parsed_answer, "metadata": metadata},
+                    )
+                provider_results.append(result)
+                candidates.append(result)
+
+            successes = self._successes(provider_results)
+            parsed_successes = [
+                candidate for candidate in successes if "confidence" in candidate.metadata
+            ]
+            if parsed_successes:
+                last_usable = self._deterministic_best(parsed_successes)
+            accepted, reason, confidence, disagreement = self._cascade_decision(
+                successes,
+                confidence_threshold,
+            )
+            self._append_cascade_decision(
+                trace,
+                provider_name,
+                step_index,
+                confidence,
+                disagreement,
+                None if accepted else reason,
+            )
+            if accepted:
+                return FusionResult(
+                    strategy="uncertainty_cascade",
+                    final=parsed_successes[0].content,
+                    candidates=self._visible_candidates(candidates),
+                    usage=self._sum_usage(candidates),
+                    judge_analysis=(
+                        f"Accepted {provider_name} at cascade step {step_index} "
+                        f"with confidence {confidence:.2f}."
+                    ),
+                )
+
+        if last_usable is not None:
+            return FusionResult(
+                strategy="uncertainty_cascade",
+                final=last_usable.content,
+                candidates=self._visible_candidates(candidates),
+                usage=self._sum_usage(candidates),
+                judge_analysis="Cascade budget or provider list exhausted; returned best usable answer.",
+            )
+        return self._no_success_result("uncertainty_cascade", candidates)
+
     async def _vote(
         self,
         strategy: str,
@@ -1979,6 +2110,12 @@ class FusionEngine:
 
         samples = max(1, samples_per_provider)
         rounds = max(0, refinement_rounds)
+        self_moa_ready = bool(
+            self.config.fusion.self_moa_provider
+            and budget.limit >= max(1, self.config.fusion.self_moa_samples) + 1
+        )
+        cascade_ready = bool(self.config.fusion.cascade_providers or len(panel) > 1)
+
         if explicit_refinement:
             strategy = "layered_refinement"
             rounds = max(1, rounds)
@@ -1988,6 +2125,10 @@ class FusionEngine:
             if len(panel) * samples < 3:
                 samples = max(1, (3 + max(1, len(panel)) - 1) // max(1, len(panel)))
             rationale = "A concise or multiple-choice task is suitable for consensus voting."
+        elif code_or_math and self_moa_ready:
+            strategy = "self_moa"
+            samples = max(1, self.config.fusion.self_moa_samples)
+            rationale = "A configured strong provider can use independent self-sampling."
         elif code_or_math:
             strategy = "best_of_n"
             if len(panel) * samples < 2:
@@ -1996,6 +2137,9 @@ class FusionEngine:
         elif complex_analysis and len(prompt) >= 80:
             strategy = "critique_revision"
             rationale = "The task benefits from independent drafts followed by critique and revision."
+        elif len(prompt) < 180 and cascade_ready:
+            strategy = "uncertainty_cascade"
+            rationale = "A simple request can start with a cheaper provider and escalate only if uncertain."
         elif len(prompt) < 180:
             strategy = "fallback"
             rationale = "The request appears simple, so a single successful provider minimizes latency."
@@ -2145,6 +2289,8 @@ class FusionEngine:
             return drafts + 2
         if strategy == "semantic_vote":
             return drafts
+        if strategy == "uncertainty_cascade":
+            return panel_size
         if strategy in {"parallel_synthesis", "best_of_n"}:
             return drafts + 1
         if strategy in {"majority_vote", "weighted_vote"}:
@@ -2184,12 +2330,47 @@ class FusionEngine:
             extra_body=extra_body or {},
         )
 
+    def _cascade_request(
+        self,
+        messages: list[ChatMessage],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+    ) -> ProviderRequest:
+        return ProviderRequest(
+            messages=[
+                ChatMessage(role="system", content=CASCADE_SYSTEM_PROMPT),
+                *messages,
+            ],
+            temperature=temperature if temperature is not None else self.config.fusion.temperature,
+            max_tokens=max_tokens if max_tokens is not None else self.config.fusion.max_tokens,
+            extra_body=extra_body or {},
+        )
+
     def _panel_names(self, panel: Iterable[str] | None) -> list[str]:
         selected = list(panel) if panel is not None else list(self.config.fusion.panel)
         if not selected:
             selected = list(self.providers.keys())
         # Stable de-duplication protects budgets from accidental repeated names.
         return list(dict.fromkeys(selected))
+
+    def _cascade_provider_names(
+        self,
+        requested: Iterable[str] | None,
+        panel: list[str],
+    ) -> list[str]:
+        selected = (
+            list(requested)
+            if requested is not None
+            else list(self.config.fusion.cascade_providers)
+        )
+        if not selected:
+            selected = panel or list(self.providers.keys())
+        selected = list(dict.fromkeys(selected))
+        missing = [name for name in selected if name not in self.providers]
+        if missing:
+            raise ValueError(f"Cascade providers not found or not enabled: {', '.join(missing)}")
+        return selected
 
     @staticmethod
     def _successes(candidates: list[CandidateResult]) -> list[CandidateResult]:
@@ -2418,7 +2599,7 @@ class FusionEngine:
         schema = {
             "strategy": "one of fallback, parallel_synthesis, self_moa, self_moa_seq, best_of_n, "
             "pairwise_rank_fuse, semantic_vote, majority_vote, weighted_vote, "
-            "critique_revision, layered_refinement",
+            "uncertainty_cascade, critique_revision, layered_refinement",
             "panel": ["enabled provider names only"],
             "judge_provider": "enabled provider name or null",
             "critic_provider": "enabled provider name or null",
@@ -2506,6 +2687,61 @@ class FusionEngine:
                 ),
                 status="ok",
                 note=json.dumps(summary, ensure_ascii=False)[:300],
+            )
+        )
+
+    def _cascade_decision(
+        self,
+        candidates: list[CandidateResult],
+        confidence_threshold: float,
+    ) -> tuple[bool, str, float, bool]:
+        if not candidates:
+            return False, "provider_failed", 0.0, False
+        confidences = [
+            float(candidate.metadata["confidence"])
+            for candidate in candidates
+            if candidate.ok and "confidence" in candidate.metadata
+        ]
+        if len(confidences) < len(candidates):
+            return False, "invalid_format", max(confidences or [0.0]), False
+        confidence = min(confidences)
+        if confidence < confidence_threshold:
+            return False, "low_confidence", confidence, False
+        disagreement = False
+        if len(candidates) > 1:
+            keys = {self._vote_key(candidate.content, None) for candidate in candidates}
+            disagreement = len(keys) > 1
+            if disagreement and self.config.fusion.cascade_escalate_on_disagreement:
+                return False, "sample_disagreement", confidence, True
+        return True, "accepted", confidence, disagreement
+
+    def _append_cascade_decision(
+        self,
+        trace: list[WorkflowStep],
+        provider_name: str,
+        step_index: int,
+        confidence: float,
+        disagreement: bool,
+        escalation_reason: str | None,
+    ) -> None:
+        summary = {
+            "provider_attempted": provider_name,
+            "step": step_index,
+            "confidence": confidence,
+            "disagreement": disagreement,
+            "escalation_reason": escalation_reason,
+        }
+        trace.append(
+            WorkflowStep(
+                stage="cascade_decision",
+                provider=provider_name,
+                model=(
+                    self.providers[provider_name].config.model
+                    if provider_name in self.providers
+                    else None
+                ),
+                status="ok" if escalation_reason is None else "fallback",
+                note=json.dumps(summary, ensure_ascii=False),
             )
         )
 
@@ -2677,6 +2913,35 @@ class FusionEngine:
                 return value.strip().casefold() in {"true", "yes", "same", "equivalent"}
         normalized = content.strip().casefold()
         return bool(re.search(r"\b(yes|true|same|equivalent)\b", normalized))
+
+    @staticmethod
+    def _parse_cascade_response(content: str) -> tuple[str | None, float]:
+        data = _extract_json_object(content)
+        if data is not None:
+            answer = data.get("answer", data.get("final_answer"))
+            confidence = data.get("confidence")
+            try:
+                parsed_confidence = float(confidence)
+            except (TypeError, ValueError):
+                parsed_confidence = -1.0
+            if isinstance(answer, str) and answer.strip() and 0 <= parsed_confidence <= 1:
+                return answer.strip(), parsed_confidence
+        confidence_match = re.search(
+            r"\bconfidence\s*[:=]\s*([01](?:\.\d+)?)",
+            content,
+            flags=re.IGNORECASE,
+        )
+        if not confidence_match:
+            return None, 0.0
+        confidence = float(confidence_match.group(1))
+        answer = re.sub(
+            r"\bconfidence\s*[:=]\s*[01](?:\.\d+)?",
+            "",
+            content,
+            flags=re.IGNORECASE,
+        ).strip()
+        answer = re.sub(r"^(?:answer|final answer)\s*[:\-]\s*", "", answer, flags=re.IGNORECASE)
+        return (answer if answer else None), confidence
 
     @staticmethod
     def _parse_selection(content: str, candidate_count: int) -> tuple[int, str] | None:

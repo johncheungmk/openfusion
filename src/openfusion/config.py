@@ -41,30 +41,66 @@ class ProviderConfig(BaseModel):
         return None
 
 
+class PanelRoleConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    instruction: str
+
+    @field_validator("name", "instruction")
+    @classmethod
+    def require_nonempty_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        return stripped
+
+
 class FusionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Legacy panel_judge remains accepted. parallel_synthesis is the clearer v0.2 name.
     default_strategy: str = "parallel_synthesis"
     panel: list[str] = Field(default_factory=list)
+    panel_roles: list[PanelRoleConfig] = Field(default_factory=list)
     judge_provider: str | None = None
     critic_provider: str | None = None
     reviser_provider: str | None = None
     planner_provider: str | None = None
+    self_moa_provider: str | None = None
+    ranker_provider: str | None = None
+    fuser_provider: str | None = None
+    vote_equivalence_provider: str | None = None
+    cascade_providers: list[str] = Field(default_factory=list)
 
     max_parallel: int = 4
     max_total_calls: int = 12
     samples_per_provider: int = 1
     refinement_rounds: int = 1
+    self_moa_samples: int = 3
+    self_moa_batch_size: int = 4
+    self_moa_seq_carry_max_chars: int = 12000
+    rank_top_k: int = 3
+    pairwise_rank_max_pairs: int = 12
+    semantic_vote_max_pairs: int = 12
+    cascade_consistency_samples: int = 1
+    cascade_max_steps: int = 3
 
     temperature: float = 0.2
     judge_temperature: float = 0.1
     critique_temperature: float = 0.1
+    self_moa_temperature: float = 0.7
     max_tokens: int | None = 256
+    self_moa_mode: Literal["select", "synthesize"] = "synthesize"
+    pairwise_rank_mode: Literal["pairwise", "score"] = "pairwise"
+    semantic_vote_mode: Literal["rule_only", "llm_equivalence"] = "rule_only"
+    cascade_confidence_threshold: float = 0.75
+    cascade_escalate_on_disagreement: bool = True
 
     require_at_least_successes: int = 1
     include_candidate_outputs: bool = True
     include_workflow_outputs: bool = True
+    structured_synthesis: bool = False
     judge_candidate_max_chars: int = 4000
     transcript_max_chars: int = 12000
     vote_answer_regex: str | None = None
@@ -77,6 +113,14 @@ class FusionConfig(BaseModel):
         "max_parallel",
         "max_total_calls",
         "samples_per_provider",
+        "self_moa_samples",
+        "self_moa_batch_size",
+        "self_moa_seq_carry_max_chars",
+        "rank_top_k",
+        "pairwise_rank_max_pairs",
+        "semantic_vote_max_pairs",
+        "cascade_consistency_samples",
+        "cascade_max_steps",
         "require_at_least_successes",
         "judge_candidate_max_chars",
         "transcript_max_chars",
@@ -92,6 +136,13 @@ class FusionConfig(BaseModel):
     def require_nonnegative_rounds(cls, value: int) -> int:
         if value < 0:
             raise ValueError("must be at least 0")
+        return value
+
+    @field_validator("cascade_confidence_threshold")
+    @classmethod
+    def require_probability(cls, value: float) -> float:
+        if value < 0 or value > 1:
+            raise ValueError("must be between 0 and 1")
         return value
 
 
@@ -126,12 +177,23 @@ class AppConfig(BaseModel):
         missing_panel = [name for name in self.fusion.panel if name not in known_names]
         if missing_panel:
             raise ValueError(f"Fusion panel references unknown providers: {', '.join(missing_panel)}")
+        missing_cascade = [
+            name for name in self.fusion.cascade_providers if name not in known_names
+        ]
+        if missing_cascade:
+            raise ValueError(
+                f"Cascade providers reference unknown providers: {', '.join(missing_cascade)}"
+            )
 
         role_references = {
             "Judge": self.fusion.judge_provider,
             "Critic": self.fusion.critic_provider,
             "Reviser": self.fusion.reviser_provider,
             "Planner": self.fusion.planner_provider,
+            "Self-MoA": self.fusion.self_moa_provider,
+            "Ranker": self.fusion.ranker_provider,
+            "Fuser": self.fusion.fuser_provider,
+            "Vote equivalence": self.fusion.vote_equivalence_provider,
         }
         for role, provider_name in role_references.items():
             if provider_name and provider_name not in known_names:
@@ -183,7 +245,21 @@ def write_example_config(path: str | Path) -> None:
         "fusion": {
             "default_strategy": "parallel_synthesis",
             "panel": ["local-ollama"],
+            "panel_roles": [],
             "judge_provider": "local-ollama",
+            "self_moa_samples": 3,
+            "self_moa_mode": "synthesize",
+            "rank_top_k": 3,
+            "pairwise_rank_max_pairs": 12,
+            "pairwise_rank_mode": "pairwise",
+            "semantic_vote_max_pairs": 12,
+            "semantic_vote_mode": "rule_only",
+            "cascade_providers": ["local-ollama"],
+            "cascade_confidence_threshold": 0.75,
+            "cascade_consistency_samples": 1,
+            "cascade_escalate_on_disagreement": True,
+            "cascade_max_steps": 3,
+            "structured_synthesis": False,
             "max_tokens": 256,
         },
     }

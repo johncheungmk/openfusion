@@ -1,0 +1,40 @@
+providers:
+  - name: local-small
+    type: openai_compatible
+    enabled: true
+    base_url: http://localhost:11434/v1
+    api_key_env:
+    model: llama3.2:3b
+    timeout_seconds: 120
+    weight: 1.0
+    headers: {}
+
+  - name: local-strong
+    type: openai_compatible
+    enabled: true
+    base_url: http://localhost:11434/v1
+    api_key_env:
+    model: qwen2.5:7b
+    timeout_seconds: 300
+    weight: 1.2
+    headers: {}
+
+fusion:
+  default_strategy: uncertainty_cascade
+  panel: [local-small, local-strong]
+  cascade_providers: [local-small, local-strong]
+  cascade_confidence_threshold: 0.75
+  cascade_consistency_samples: 1
+  cascade_escalate_on_disagreement: true
+  cascade_max_steps: 2
+  max_total_calls: 4
+  max_parallel: 1
+  temperature: 0.2
+  max_tokens: 128
+  include_candidate_outputs: true
+  include_workflow_outputs: true
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  api_key_env: OPENFUSION_API_KEY

@@ -28,6 +28,15 @@ self-contained final answer. Do not merely select or concatenate a candidate. Do
 hidden chain-of-thought or private reasoning. Return only the useful user-facing answer.
 """
 
+STRUCTURED_SYNTHESIS_SYSTEM_PROMPT = """You are OpenFusion's structured synthesis agent.
+Use the supplied independent candidate answers as evidence, not as authorities.
+Return strict JSON only with exactly these keys:
+consensus_points, contradictions, unique_insights, missing_information, final_answer.
+The first four values must be public user-visible strings or arrays of strings. final_answer
+must be the complete user-facing answer. Do not expose hidden chain-of-thought or private
+reasoning.
+"""
+
 SELECTOR_SYSTEM_PROMPT = """You are OpenFusion's best-of-N evaluator.
 Choose the candidate that most accurately and completely answers the user's request.
 Do not rewrite the answer and do not expose hidden chain-of-thought. Return strict JSON only:
@@ -58,9 +67,36 @@ invent providers, tools, or strategies. Return strict JSON only and give one bri
 rationale, not hidden chain-of-thought.
 """
 
+RANKER_SYSTEM_PROMPT = """You are OpenFusion's public ranking agent.
+Rank candidate answers for accuracy, completeness, instruction-following, and usefulness.
+Do not expose hidden chain-of-thought. Return strict JSON only in the requested shape.
+"""
+
+PAIRWISE_RANKER_SYSTEM_PROMPT = """You are OpenFusion's pairwise ranking agent.
+Choose which candidate better answers the user's request. Do not expose hidden chain-of-thought.
+Return strict JSON only: {"winner": 1, "score_1": 0.0, "score_2": 0.0}
+"""
+
+SEMANTIC_EQUIVALENCE_SYSTEM_PROMPT = """You are OpenFusion's semantic equivalence checker.
+Decide whether two concise answers mean the same answer for the user's request. Ignore wording
+differences such as numerals versus words. Do not expose hidden chain-of-thought. Return strict
+JSON only: {"equivalent": true}
+"""
+
+CASCADE_SYSTEM_PROMPT = """You are OpenFusion's uncertainty-cascade responder.
+Answer concisely and provide a public confidence score for your answer. Return strict JSON only:
+{"answer": "concise user-facing answer", "confidence": 0.0}
+Do not expose hidden chain-of-thought or private reasoning.
+"""
+
 SUPPORTED_STRATEGIES = (
     "fallback",
     "parallel_synthesis",
+    "self_moa",
+    "self_moa_seq",
+    "pairwise_rank_fuse",
+    "semantic_vote",
+    "uncertainty_cascade",
     "best_of_n",
     "majority_vote",
     "weighted_vote",
@@ -77,6 +113,12 @@ STRATEGY_ALIASES = {
     "parallel-judge": "parallel_synthesis",
     "parallel-synthesis": "parallel_synthesis",
     "fusion": "parallel_synthesis",
+    "self-moa": "self_moa",
+    "self-moa-seq": "self_moa_seq",
+    "pairwise-rank-fuse": "pairwise_rank_fuse",
+    "rank-fuse": "pairwise_rank_fuse",
+    "semantic-vote": "semantic_vote",
+    "uncertainty-cascade": "uncertainty_cascade",
     "best-of-n": "best_of_n",
     "majority-vote": "majority_vote",
     "weighted-vote": "weighted_vote",
@@ -99,6 +141,14 @@ class CallBudget:
             return False
         self.used += 1
         return True
+
+
+@dataclass
+class RankingResult:
+    ordered: list[CandidateResult]
+    usage: Usage
+    summary: dict[str, Any]
+    parsed: bool
 
 
 def canonical_strategy(strategy: str) -> str:
@@ -194,10 +244,52 @@ class FusionEngine:
         refinement_rounds: int | None = None,
         max_total_calls: int | None = None,
         vote_regex: str | None = None,
+        self_moa_provider: str | None = None,
+        self_moa_samples: int | None = None,
+        self_moa_mode: str | None = None,
+        structured_synthesis: bool | None = None,
+        ranker_provider: str | None = None,
+        rank_top_k: int | None = None,
+        pairwise_rank_max_pairs: int | None = None,
+        pairwise_rank_mode: str | None = None,
+        cascade_providers: Iterable[str] | None = None,
+        cascade_confidence_threshold: float | None = None,
+        cascade_consistency_samples: int | None = None,
     ) -> FusionResult:
         selected_strategy = canonical_strategy(strategy or self.config.fusion.default_strategy)
         panel_names = self._panel_names(panel)
         samples = max(1, samples_per_provider or self.config.fusion.samples_per_provider)
+        self_samples = max(1, self_moa_samples or self.config.fusion.self_moa_samples)
+        selected_self_moa_mode = self_moa_mode or self.config.fusion.self_moa_mode
+        if selected_self_moa_mode not in {"select", "synthesize"}:
+            raise ValueError("self_moa_mode must be either 'select' or 'synthesize'")
+        selected_pairwise_rank_mode = (
+            pairwise_rank_mode or self.config.fusion.pairwise_rank_mode
+        )
+        if selected_pairwise_rank_mode not in {"pairwise", "score"}:
+            raise ValueError("pairwise_rank_mode must be either 'pairwise' or 'score'")
+        selected_rank_top_k = max(1, rank_top_k or self.config.fusion.rank_top_k)
+        selected_pairwise_rank_max_pairs = max(
+            1,
+            pairwise_rank_max_pairs or self.config.fusion.pairwise_rank_max_pairs,
+        )
+        selected_cascade_providers = self._cascade_provider_names(cascade_providers, panel_names)
+        selected_cascade_threshold = (
+            self.config.fusion.cascade_confidence_threshold
+            if cascade_confidence_threshold is None
+            else cascade_confidence_threshold
+        )
+        if selected_cascade_threshold < 0 or selected_cascade_threshold > 1:
+            raise ValueError("cascade_confidence_threshold must be between 0 and 1")
+        selected_cascade_samples = max(
+            1,
+            cascade_consistency_samples or self.config.fusion.cascade_consistency_samples,
+        )
+        use_structured_synthesis = (
+            self.config.fusion.structured_synthesis
+            if structured_synthesis is None
+            else structured_synthesis
+        )
         rounds = (
             self.config.fusion.refinement_rounds
             if refinement_rounds is None
@@ -231,6 +323,7 @@ class FusionEngine:
                 samples_per_provider=samples,
                 refinement_rounds=rounds,
                 max_total_calls=call_limit,
+                self_moa_samples=self_samples,
             )
 
         result = await self._execute(
@@ -246,6 +339,17 @@ class FusionEngine:
             samples_per_provider=plan.samples_per_provider,
             refinement_rounds=plan.refinement_rounds,
             vote_regex=vote_regex or self.config.fusion.vote_answer_regex,
+            self_moa_provider=self_moa_provider,
+            self_moa_samples=self_samples,
+            self_moa_mode=selected_self_moa_mode,
+            structured_synthesis=use_structured_synthesis,
+            ranker_provider=ranker_provider,
+            rank_top_k=selected_rank_top_k,
+            pairwise_rank_max_pairs=selected_pairwise_rank_max_pairs,
+            pairwise_rank_mode=selected_pairwise_rank_mode,
+            cascade_providers=selected_cascade_providers,
+            cascade_confidence_threshold=selected_cascade_threshold,
+            cascade_consistency_samples=selected_cascade_samples,
             budget=budget,
             trace=trace,
         )
@@ -332,6 +436,17 @@ class FusionEngine:
         samples_per_provider: int,
         refinement_rounds: int,
         vote_regex: str | None,
+        self_moa_provider: str | None,
+        self_moa_samples: int,
+        self_moa_mode: str,
+        structured_synthesis: bool,
+        ranker_provider: str | None,
+        rank_top_k: int,
+        pairwise_rank_max_pairs: int,
+        pairwise_rank_mode: str,
+        cascade_providers: list[str],
+        cascade_confidence_threshold: float,
+        cascade_consistency_samples: int,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
@@ -354,6 +469,76 @@ class FusionEngine:
                 max_tokens,
                 extra_body,
                 samples_per_provider,
+                structured_synthesis,
+                budget,
+                trace,
+            )
+        if strategy == "self_moa":
+            return await self._self_moa(
+                messages,
+                panel,
+                self_moa_provider,
+                judge_provider,
+                temperature,
+                max_tokens,
+                extra_body,
+                self_moa_samples or samples_per_provider,
+                self_moa_mode,
+                budget,
+                trace,
+            )
+        if strategy == "self_moa_seq":
+            return await self._self_moa_seq(
+                messages,
+                panel,
+                self_moa_provider,
+                judge_provider,
+                temperature,
+                max_tokens,
+                extra_body,
+                self_moa_samples or samples_per_provider,
+                self_moa_mode,
+                budget,
+                trace,
+            )
+        if strategy == "pairwise_rank_fuse":
+            return await self._pairwise_rank_fuse(
+                messages,
+                panel,
+                ranker_provider,
+                judge_provider,
+                temperature,
+                max_tokens,
+                extra_body,
+                samples_per_provider,
+                rank_top_k,
+                pairwise_rank_max_pairs,
+                pairwise_rank_mode,
+                structured_synthesis,
+                budget,
+                trace,
+            )
+        if strategy == "semantic_vote":
+            return await self._semantic_vote(
+                messages,
+                panel,
+                temperature,
+                max_tokens,
+                extra_body,
+                samples_per_provider,
+                vote_regex,
+                budget,
+                trace,
+            )
+        if strategy == "uncertainty_cascade":
+            return await self._uncertainty_cascade(
+                messages,
+                cascade_providers,
+                temperature,
+                max_tokens,
+                extra_body,
+                cascade_confidence_threshold,
+                cascade_consistency_samples,
                 budget,
                 trace,
             )
@@ -406,6 +591,7 @@ class FusionEngine:
                 extra_body,
                 samples_per_provider,
                 refinement_rounds,
+                structured_synthesis,
                 budget,
                 trace,
             )
@@ -420,6 +606,7 @@ class FusionEngine:
         trace: list[WorkflowStep],
         stage: str,
         sample_index: int,
+        role_name: str | None = None,
     ) -> CandidateResult:
         provider = self.providers.get(provider_name)
         if provider is None:
@@ -430,12 +617,14 @@ class FusionEngine:
                 error=f"Provider not found or not enabled: {provider_name}",
                 stage=stage,
                 sample_index=sample_index,
+                metadata={"role_name": role_name} if role_name else {},
             )
             trace.append(
                 WorkflowStep(
                     stage=stage,
                     provider=provider_name,
                     model="unknown",
+                    role_name=role_name,
                     status="error",
                     note=result.error,
                 )
@@ -450,12 +639,14 @@ class FusionEngine:
                 error=f"Call budget exhausted ({budget.limit} calls)",
                 stage=stage,
                 sample_index=sample_index,
+                metadata={"role_name": role_name} if role_name else {},
             )
             trace.append(
                 WorkflowStep(
                     stage=stage,
                     provider=provider_name,
                     model=provider.config.model,
+                    role_name=role_name,
                     status="skipped",
                     note=result.error,
                 )
@@ -467,11 +658,14 @@ class FusionEngine:
         result.model = provider.config.model
         result.stage = stage
         result.sample_index = sample_index
+        if role_name:
+            result.metadata = {**result.metadata, "role_name": role_name}
         trace.append(
             WorkflowStep(
                 stage=stage,
                 provider=provider_name,
                 model=provider.config.model,
+                role_name=role_name,
                 status="ok" if result.ok and result.content.strip() else "error",
                 latency_ms=result.latency_ms,
                 note=None if result.ok else (result.error or "empty response")[:300],
@@ -487,17 +681,31 @@ class FusionEngine:
         budget: CallBudget,
         trace: list[WorkflowStep],
         stage: str,
+        use_panel_roles: bool = False,
     ) -> list[CandidateResult]:
         semaphore = asyncio.Semaphore(max(1, self.config.fusion.max_parallel))
         tasks = []
         total_requested = len(provider_names) * samples_per_provider
+        call_index = 0
         for provider_name in provider_names:
             for sample_index in range(1, samples_per_provider + 1):
+                role = self._panel_role(call_index) if use_panel_roles else None
                 sample_request = request
                 if total_requested > 1:
                     sample_request = request.model_copy(
                         update={
                             "messages": self._sampling_messages(request.messages, sample_index),
+                        },
+                        deep=True,
+                    )
+                if role is not None:
+                    sample_request = sample_request.model_copy(
+                        update={
+                            "messages": self._role_messages(
+                                sample_request.messages,
+                                role.name,
+                                role.instruction,
+                            ),
                         },
                         deep=True,
                     )
@@ -510,8 +718,10 @@ class FusionEngine:
                         trace,
                         stage=stage,
                         sample_index=sample_index,
+                        role_name=role.name if role is not None else None,
                     )
                 )
+                call_index += 1
         if not tasks:
             return []
         return list(await asyncio.gather(*tasks))
@@ -525,12 +735,19 @@ class FusionEngine:
         max_tokens: int | None,
         extra_body: dict[str, Any] | None,
         samples_per_provider: int,
+        structured_synthesis: bool,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
         request = self._provider_request(messages, temperature, max_tokens, extra_body)
         candidates = await self._generate_candidates(
-            panel, request, samples_per_provider, budget, trace, stage="draft"
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="draft",
+            use_panel_roles=True,
         )
         successes = self._successes(candidates)
         if len(successes) < self.config.fusion.require_at_least_successes:
@@ -550,16 +767,23 @@ class FusionEngine:
             budget,
             trace,
             stage="synthesis",
+            structured_synthesis=structured_synthesis,
         )
         usage = self._sum_usage(candidates) + judge_result.usage
         if judge_result.ok and judge_result.content.strip():
+            final, analysis, outputs = self._finalize_synthesis_result(
+                judge_result,
+                len(successes),
+                structured_synthesis,
+            )
             return FusionResult(
                 strategy="parallel_synthesis",
-                final=judge_result.content,
+                final=final,
                 judge_provider=selected_judge,
-                judge_analysis=f"Synthesized {len(successes)} independent candidate(s).",
+                judge_analysis=analysis,
                 candidates=self._visible_candidates(candidates),
                 usage=usage,
+                workflow_outputs=outputs,
             )
 
         best = self._deterministic_best(successes)
@@ -651,6 +875,780 @@ class FusionEngine:
             usage=usage,
         )
 
+    async def _self_moa(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        self_moa_provider: str | None,
+        judge_provider: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        sample_count: int,
+        mode: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        selected_provider = self._self_moa_role_provider(self_moa_provider, judge_provider, panel)
+        request = self._provider_request(
+            messages,
+            temperature if temperature is not None else self.config.fusion.self_moa_temperature,
+            max_tokens,
+            extra_body,
+        )
+        candidates = await self._generate_candidates(
+            [selected_provider],
+            request,
+            sample_count,
+            budget,
+            trace,
+            stage="self_moa_sample",
+        )
+        successes = self._successes(candidates)
+        if not successes:
+            self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+            return self._no_success_result("self_moa", candidates)
+
+        final, judge_analysis, aggregator = await self._self_moa_finalize(
+            messages,
+            successes,
+            selected_provider,
+            max_tokens,
+            mode,
+            budget,
+            trace,
+            stage="self_moa_synthesis" if mode == "synthesize" else "self_moa_selection",
+        )
+        usage = self._sum_usage(candidates) + aggregator.usage
+        self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+        return FusionResult(
+            strategy="self_moa",
+            final=final,
+            judge_provider=selected_provider,
+            judge_analysis=judge_analysis,
+            candidates=self._visible_candidates(candidates),
+            usage=usage,
+        )
+
+    async def _self_moa_seq(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        self_moa_provider: str | None,
+        judge_provider: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        sample_count: int,
+        mode: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        selected_provider = self._self_moa_role_provider(self_moa_provider, judge_provider, panel)
+        request = self._provider_request(
+            messages,
+            temperature if temperature is not None else self.config.fusion.self_moa_temperature,
+            max_tokens,
+            extra_body,
+        )
+        batch_size = max(1, self.config.fusion.self_moa_batch_size)
+        all_candidates: list[CandidateResult] = []
+        aggregators: list[CandidateResult] = []
+        carry: CandidateResult | None = None
+        requested = max(1, sample_count)
+        generated = 0
+
+        while generated < requested and budget.remaining > 0:
+            current_batch_size = min(batch_size, requested - generated)
+            batch = await self._generate_candidates(
+                [selected_provider],
+                request,
+                current_batch_size,
+                budget,
+                trace,
+                stage=f"self_moa_seq_batch_{(generated // batch_size) + 1}",
+            )
+            generated += current_batch_size
+            all_candidates.extend(batch)
+            batch_successes = self._successes(batch)
+            pool = ([carry] if carry is not None and carry.content.strip() else []) + batch_successes
+            if not pool:
+                continue
+            if len(pool) == 1 or budget.remaining <= 0:
+                carry = self._carry_candidate(pool[0], selected_provider, generated)
+                continue
+
+            final, _analysis, aggregator = await self._self_moa_finalize(
+                messages,
+                pool,
+                selected_provider,
+                max_tokens,
+                mode,
+                budget,
+                trace,
+                stage=f"self_moa_seq_{mode}_{(generated + batch_size - 1) // batch_size}",
+            )
+            aggregators.append(aggregator)
+            carry_model = (
+                self.providers[selected_provider].config.model
+                if selected_provider in self.providers
+                else selected_provider
+            )
+            carry = self._carry_candidate(
+                CandidateResult(
+                    provider=selected_provider,
+                    model=carry_model,
+                    content=final,
+                    ok=bool(final.strip()),
+                    stage="self_moa_seq_carry",
+                    sample_index=generated,
+                ),
+                selected_provider,
+                generated,
+            )
+
+        successes = self._successes(all_candidates)
+        if carry is not None and carry.content.strip():
+            final = carry.content
+            analysis = (
+                f"Sequential Self-MoA carried a running {mode} answer across "
+                f"{len(successes)} usable sample(s)."
+            )
+        elif successes:
+            best = self._deterministic_best(successes)
+            final = best.content
+            analysis = "Sequential Self-MoA used deterministic fallback from usable samples."
+        else:
+            self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+            return self._no_success_result("self_moa_seq", all_candidates)
+
+        self._append_self_moa_summary(trace, selected_provider, sample_count, mode, budget)
+        return FusionResult(
+            strategy="self_moa_seq",
+            final=final,
+            judge_provider=selected_provider,
+            judge_analysis=analysis,
+            candidates=self._visible_candidates(all_candidates),
+            usage=self._sum_usage(all_candidates) + self._sum_usage(aggregators),
+        )
+
+    async def _self_moa_finalize(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        provider_name: str,
+        max_tokens: int | None,
+        mode: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+        stage: str,
+    ) -> tuple[str, str, CandidateResult]:
+        if len(candidates) == 1:
+            return candidates[0].content, "Only one usable Self-MoA sample was available.", CandidateResult(
+                provider=provider_name,
+                model=candidates[0].model,
+                ok=False,
+                error="selection not needed",
+                stage=stage,
+            )
+        if mode == "select":
+            selector_request = ProviderRequest(
+                messages=[
+                    ChatMessage(role="system", content=SELECTOR_SYSTEM_PROMPT),
+                    ChatMessage(role="user", content=self._build_selector_prompt(messages, candidates)),
+                ],
+                temperature=0.0,
+                max_tokens=220,
+            )
+            selector = await self._call_provider(
+                provider_name,
+                selector_request,
+                asyncio.Semaphore(1),
+                budget,
+                trace,
+                stage=stage,
+                sample_index=1,
+            )
+            selection = self._parse_selection(selector.content, len(candidates)) if selector.ok else None
+            if selection is not None:
+                winner_index, reason = selection
+                return candidates[winner_index].content, reason, selector
+            winner = self._deterministic_best(candidates)
+            detail = selector.error or "selector returned invalid JSON"
+            return winner.content, f"Deterministic fallback used because {detail}.", selector
+
+        synthesis = await self._call_synthesizer(
+            messages,
+            candidates,
+            provider_name,
+            max_tokens,
+            budget,
+            trace,
+            stage=stage,
+        )
+        if synthesis.ok and synthesis.content.strip():
+            return (
+                synthesis.content,
+                f"Synthesized {len(candidates)} Self-MoA sample(s).",
+                synthesis,
+            )
+        best = self._deterministic_best(candidates)
+        return best.content, f"Synthesis failed: {synthesis.error or 'empty response'}", synthesis
+
+    async def _pairwise_rank_fuse(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        ranker_provider: str | None,
+        judge_provider: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        samples_per_provider: int,
+        rank_top_k: int,
+        pairwise_rank_max_pairs: int,
+        pairwise_rank_mode: str,
+        structured_synthesis: bool,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        request = self._provider_request(messages, temperature, max_tokens, extra_body)
+        candidates = await self._generate_candidates(
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="rank_candidate",
+            use_panel_roles=True,
+        )
+        successes = self._successes(candidates)
+        if not successes:
+            return self._no_success_result("pairwise_rank_fuse", candidates)
+        if len(successes) == 1:
+            return FusionResult(
+                strategy="pairwise_rank_fuse",
+                final=successes[0].content,
+                judge_analysis="Only one usable candidate was available.",
+                candidates=self._visible_candidates(candidates),
+                usage=self._sum_usage(candidates),
+            )
+
+        selected_ranker = self._role_provider(
+            ranker_provider,
+            self.config.fusion.ranker_provider or self.config.fusion.judge_provider,
+            successes,
+            panel,
+        )
+        ranking = await self._rank_candidates(
+            messages,
+            successes,
+            selected_ranker,
+            pairwise_rank_mode,
+            pairwise_rank_max_pairs,
+            budget,
+            trace,
+        )
+        top_candidates = ranking.ordered[: min(rank_top_k, len(ranking.ordered))]
+        selected_fuser = self._role_provider(
+            self.config.fusion.fuser_provider,
+            judge_provider or self.config.fusion.judge_provider,
+            top_candidates,
+            panel,
+        )
+        synthesis = await self._call_synthesizer(
+            messages,
+            top_candidates,
+            selected_fuser,
+            max_tokens,
+            budget,
+            trace,
+            stage="rank_fusion",
+            structured_synthesis=structured_synthesis,
+        )
+        usage = self._sum_usage(candidates) + ranking.usage + synthesis.usage
+        outputs = {}
+        if self.config.fusion.include_workflow_outputs:
+            outputs["ranking"] = json.dumps(ranking.summary, ensure_ascii=False)
+
+        if synthesis.ok and synthesis.content.strip():
+            final, analysis, synthesis_outputs = self._finalize_synthesis_result(
+                synthesis,
+                len(top_candidates),
+                structured_synthesis,
+                plain_success=f"Fused top {len(top_candidates)} ranked candidate(s).",
+                structured_success=(
+                    f"Structured fusion parsed top {len(top_candidates)} ranked candidate(s)."
+                ),
+            )
+            outputs.update(synthesis_outputs)
+        else:
+            final = top_candidates[0].content
+            analysis = f"Rank fusion failed: {synthesis.error or 'empty response'}"
+
+        if not ranking.parsed:
+            analysis = f"Ranking parse failed; used candidate order. {analysis}"
+
+        return FusionResult(
+            strategy="pairwise_rank_fuse",
+            final=final,
+            judge_provider=selected_fuser,
+            judge_analysis=analysis,
+            candidates=self._visible_candidates(candidates),
+            usage=usage,
+            workflow_outputs=outputs,
+        )
+
+    async def _rank_candidates(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        ranker_provider: str,
+        mode: str,
+        max_pairs: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> RankingResult:
+        if mode == "score":
+            return await self._score_rank_candidates(
+                messages,
+                candidates,
+                ranker_provider,
+                budget,
+                trace,
+            )
+        return await self._pairwise_rank_candidates(
+            messages,
+            candidates,
+            ranker_provider,
+            max_pairs,
+            budget,
+            trace,
+        )
+
+    async def _score_rank_candidates(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        ranker_provider: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> RankingResult:
+        request = ProviderRequest(
+            messages=[
+                ChatMessage(role="system", content=RANKER_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=self._build_score_ranking_prompt(messages, candidates),
+                ),
+            ],
+            temperature=0.0,
+            max_tokens=700,
+        )
+        ranking_call = await self._call_provider(
+            ranker_provider,
+            request,
+            asyncio.Semaphore(1),
+            budget,
+            trace,
+            stage="score_ranking",
+            sample_index=1,
+        )
+        usage = ranking_call.usage
+        scores = self._parse_score_ranking(ranking_call.content, len(candidates)) if ranking_call.ok else None
+        if scores is None:
+            summary = {"mode": "score", "parsed": False, "scores": []}
+            self._append_ranking_summary(trace, ranker_provider, summary)
+            return RankingResult(candidates, usage, summary, parsed=False)
+
+        ordered_indexes = sorted(range(len(candidates)), key=lambda index: scores[index], reverse=True)
+        summary = {
+            "mode": "score",
+            "parsed": True,
+            "scores": [
+                {"candidate": index + 1, "score": scores[index]} for index in ordered_indexes
+            ],
+        }
+        self._append_ranking_summary(trace, ranker_provider, summary)
+        return RankingResult(
+            [candidates[index] for index in ordered_indexes],
+            usage,
+            summary,
+            parsed=True,
+        )
+
+    async def _pairwise_rank_candidates(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        ranker_provider: str,
+        max_pairs: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> RankingResult:
+        wins = [0 for _ in candidates]
+        compared = 0
+        parsed_any = False
+        usage = Usage()
+        pair_summaries: list[dict[str, Any]] = []
+        pairs = [
+            (left, right)
+            for left in range(len(candidates))
+            for right in range(left + 1, len(candidates))
+        ][: max(0, max_pairs)]
+        for pair_index, (left, right) in enumerate(pairs, start=1):
+            if budget.remaining <= 0:
+                break
+            request = ProviderRequest(
+                messages=[
+                    ChatMessage(role="system", content=PAIRWISE_RANKER_SYSTEM_PROMPT),
+                    ChatMessage(
+                        role="user",
+                        content=self._build_pairwise_ranking_prompt(
+                            messages,
+                            candidates[left],
+                            candidates[right],
+                        ),
+                    ),
+                ],
+                temperature=0.0,
+                max_tokens=220,
+            )
+            result = await self._call_provider(
+                ranker_provider,
+                request,
+                asyncio.Semaphore(1),
+                budget,
+                trace,
+                stage="pairwise_ranking",
+                sample_index=pair_index,
+            )
+            usage += result.usage
+            if not result.ok:
+                continue
+            winner = self._parse_pairwise_winner(result.content)
+            if winner is None:
+                continue
+            parsed_any = True
+            compared += 1
+            winner_index = left if winner == 1 else right
+            wins[winner_index] += 1
+            pair_summaries.append(
+                {"pair": [left + 1, right + 1], "winner": winner_index + 1}
+            )
+
+        if not parsed_any:
+            summary = {
+                "mode": "pairwise",
+                "parsed": False,
+                "max_pairs": max_pairs,
+                "pairs_compared": compared,
+                "wins": [],
+            }
+            self._append_ranking_summary(trace, ranker_provider, summary)
+            return RankingResult(candidates, usage, summary, parsed=False)
+
+        ordered_indexes = sorted(
+            range(len(candidates)),
+            key=lambda index: (wins[index], candidates[index].weight, len(candidates[index].content)),
+            reverse=True,
+        )
+        summary = {
+            "mode": "pairwise",
+            "parsed": True,
+            "max_pairs": max_pairs,
+            "pairs_compared": compared,
+            "wins": [{"candidate": index + 1, "wins": wins[index]} for index in ordered_indexes],
+            "pairs": pair_summaries,
+        }
+        self._append_ranking_summary(trace, ranker_provider, summary)
+        return RankingResult(
+            [candidates[index] for index in ordered_indexes],
+            usage,
+            summary,
+            parsed=True,
+        )
+
+    async def _semantic_vote(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        samples_per_provider: int,
+        vote_regex: str | None,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        request = self._provider_request(messages, temperature, max_tokens, extra_body)
+        candidates = await self._generate_candidates(
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="semantic_vote_candidate",
+        )
+        successes = self._successes(candidates)
+        if not successes:
+            return self._no_success_result("semantic_vote", candidates)
+
+        selected_equivalence = (
+            self.config.fusion.vote_equivalence_provider
+            if self.config.fusion.vote_equivalence_provider in self.providers
+            else None
+        )
+        use_llm = (
+            self.config.fusion.semantic_vote_mode == "llm_equivalence"
+            and selected_equivalence is not None
+        )
+        groups, summary, equivalence_usage = await self._semantic_vote_groups(
+            messages,
+            successes,
+            vote_regex,
+            selected_equivalence,
+            use_llm,
+            budget,
+            trace,
+        )
+
+        def score(group: list[CandidateResult]) -> tuple[int, float, int]:
+            weighted = sum(candidate.weight for candidate in group)
+            longest = max(len(candidate.content) for candidate in group)
+            return len(group), weighted, longest
+
+        winning_group = max(groups, key=score)
+        representative = self._deterministic_best(winning_group)
+        weighted_score = sum(candidate.weight for candidate in winning_group)
+        summary.update(
+            {
+                "winning_group_size": len(winning_group),
+                "weighted_score": weighted_score,
+                "usable_candidates": len(successes),
+                "groups": len(groups),
+            }
+        )
+        outputs = (
+            {"semantic_vote_summary": json.dumps(summary, ensure_ascii=False)}
+            if self.config.fusion.include_workflow_outputs
+            else {}
+        )
+        return FusionResult(
+            strategy="semantic_vote",
+            final=representative.content,
+            judge_analysis=(
+                f"Winning semantic group: {len(winning_group)}/{len(successes)} usable "
+                f"candidate(s), weighted score {weighted_score:g}."
+            ),
+            candidates=self._visible_candidates(candidates),
+            usage=self._sum_usage(candidates) + equivalence_usage,
+            workflow_outputs=outputs,
+        )
+
+    async def _semantic_vote_groups(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+        vote_regex: str | None,
+        equivalence_provider: str | None,
+        use_llm: bool,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> tuple[list[list[CandidateResult]], dict[str, Any], Usage]:
+        groups: list[list[CandidateResult]] = []
+        group_keys: list[str] = []
+        comparisons = 0
+        equivalent_pairs: list[dict[str, int]] = []
+        usage = Usage()
+        max_pairs = max(1, self.config.fusion.semantic_vote_max_pairs)
+        mode = "llm_equivalence" if use_llm else "rule_only"
+
+        for candidate_index, candidate in enumerate(candidates, start=1):
+            key = self._vote_key(candidate.content, vote_regex)
+            exact_match_index = next(
+                (index for index, group_key in enumerate(group_keys) if group_key == key),
+                None,
+            )
+            if exact_match_index is not None:
+                groups[exact_match_index].append(candidate)
+                continue
+
+            matched_group: int | None = None
+            if use_llm and equivalence_provider is not None:
+                for group_index, group in enumerate(groups):
+                    if comparisons >= max_pairs or budget.remaining <= 0:
+                        break
+                    comparisons += 1
+                    equivalent, call_usage = await self._call_equivalence_provider(
+                        messages,
+                        candidate,
+                        group[0],
+                        equivalence_provider,
+                        budget,
+                        trace,
+                        comparisons,
+                    )
+                    usage += call_usage
+                    if equivalent:
+                        matched_group = group_index
+                        equivalent_pairs.append(
+                            {"candidate": candidate_index, "group": group_index + 1}
+                        )
+                        break
+
+            if matched_group is None:
+                groups.append([candidate])
+                group_keys.append(key)
+            else:
+                groups[matched_group].append(candidate)
+
+        summary = {
+            "mode": mode,
+            "equivalence_provider": equivalence_provider,
+            "max_pairs": max_pairs,
+            "pairs_compared": comparisons,
+            "equivalent_pairs": equivalent_pairs,
+        }
+        trace.append(
+            WorkflowStep(
+                stage="semantic_vote_summary",
+                provider=equivalence_provider,
+                model=(
+                    self.providers[equivalence_provider].config.model
+                    if equivalence_provider in self.providers
+                    else None
+                ),
+                status="ok",
+                note=json.dumps(summary, ensure_ascii=False)[:300],
+            )
+        )
+        return groups, summary, usage
+
+    async def _call_equivalence_provider(
+        self,
+        messages: list[ChatMessage],
+        candidate: CandidateResult,
+        representative: CandidateResult,
+        provider_name: str,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+        sample_index: int,
+    ) -> tuple[bool, Usage]:
+        request = ProviderRequest(
+            messages=[
+                ChatMessage(role="system", content=SEMANTIC_EQUIVALENCE_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=self._build_equivalence_prompt(messages, candidate, representative),
+                ),
+            ],
+            temperature=0.0,
+            max_tokens=80,
+        )
+        result = await self._call_provider(
+            provider_name,
+            request,
+            asyncio.Semaphore(1),
+            budget,
+            trace,
+            stage="semantic_equivalence",
+            sample_index=sample_index,
+        )
+        if not result.ok:
+            return False, result.usage
+        return self._parse_equivalence(result.content), result.usage
+
+    async def _uncertainty_cascade(
+        self,
+        messages: list[ChatMessage],
+        cascade_providers: list[str],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        confidence_threshold: float,
+        consistency_samples: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        candidates: list[CandidateResult] = []
+        max_steps = min(max(1, self.config.fusion.cascade_max_steps), len(cascade_providers))
+        last_usable: CandidateResult | None = None
+        for step_index, provider_name in enumerate(cascade_providers[:max_steps], start=1):
+            if budget.remaining <= 0:
+                break
+            provider_results: list[CandidateResult] = []
+            requested_samples = max(1, consistency_samples)
+            for sample_index in range(1, requested_samples + 1):
+                if budget.remaining <= 0:
+                    break
+                request = self._cascade_request(messages, temperature, max_tokens, extra_body)
+                if requested_samples > 1:
+                    request = request.model_copy(
+                        update={
+                            "messages": self._sampling_messages(request.messages, sample_index),
+                        },
+                        deep=True,
+                    )
+                result = await self._call_provider(
+                    provider_name,
+                    request,
+                    asyncio.Semaphore(1),
+                    budget,
+                    trace,
+                    stage="cascade_attempt",
+                    sample_index=sample_index,
+                )
+                parsed_answer, confidence = self._parse_cascade_response(result.content)
+                metadata = dict(result.metadata)
+                if parsed_answer is not None:
+                    metadata["confidence"] = confidence
+                    result = result.model_copy(
+                        update={"content": parsed_answer, "metadata": metadata},
+                    )
+                provider_results.append(result)
+                candidates.append(result)
+
+            successes = self._successes(provider_results)
+            parsed_successes = [
+                candidate for candidate in successes if "confidence" in candidate.metadata
+            ]
+            if parsed_successes:
+                last_usable = self._deterministic_best(parsed_successes)
+            accepted, reason, confidence, disagreement = self._cascade_decision(
+                successes,
+                confidence_threshold,
+            )
+            self._append_cascade_decision(
+                trace,
+                provider_name,
+                step_index,
+                confidence,
+                disagreement,
+                None if accepted else reason,
+            )
+            if accepted:
+                return FusionResult(
+                    strategy="uncertainty_cascade",
+                    final=parsed_successes[0].content,
+                    candidates=self._visible_candidates(candidates),
+                    usage=self._sum_usage(candidates),
+                    judge_analysis=(
+                        f"Accepted {provider_name} at cascade step {step_index} "
+                        f"with confidence {confidence:.2f}."
+                    ),
+                )
+
+        if last_usable is not None:
+            return FusionResult(
+                strategy="uncertainty_cascade",
+                final=last_usable.content,
+                candidates=self._visible_candidates(candidates),
+                usage=self._sum_usage(candidates),
+                judge_analysis="Cascade budget or provider list exhausted; returned best usable answer.",
+            )
+        return self._no_success_result("uncertainty_cascade", candidates)
+
     async def _vote(
         self,
         strategy: str,
@@ -729,7 +1727,13 @@ class FusionEngine:
     ) -> FusionResult:
         request = self._provider_request(messages, temperature, max_tokens, extra_body)
         candidates = await self._generate_candidates(
-            panel, request, samples_per_provider, budget, trace, stage="draft"
+            panel,
+            request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="draft",
+            use_panel_roles=True,
         )
         successes = self._successes(candidates)
         if len(successes) < self.config.fusion.require_at_least_successes:
@@ -823,12 +1827,19 @@ class FusionEngine:
         extra_body: dict[str, Any] | None,
         samples_per_provider: int,
         refinement_rounds: int,
+        structured_synthesis: bool,
         budget: CallBudget,
         trace: list[WorkflowStep],
     ) -> FusionResult:
         base_request = self._provider_request(messages, temperature, max_tokens, extra_body)
         all_candidates = await self._generate_candidates(
-            panel, base_request, samples_per_provider, budget, trace, stage="layer_0"
+            panel,
+            base_request,
+            samples_per_provider,
+            budget,
+            trace,
+            stage="layer_0",
+            use_panel_roles=True,
         )
         current = self._successes(all_candidates)
         if not current:
@@ -855,6 +1866,7 @@ class FusionEngine:
                 budget,
                 trace,
                 stage=f"layer_{round_index}",
+                use_panel_roles=True,
             )
             all_candidates.extend(layer)
             layer_successes = self._successes(layer)
@@ -877,14 +1889,26 @@ class FusionEngine:
             budget,
             trace,
             stage="final_synthesis",
+            structured_synthesis=structured_synthesis,
         )
         usage = self._sum_usage(all_candidates) + synthesis.usage
         if synthesis.ok and synthesis.content.strip():
-            final = synthesis.content
-            note = f"Synthesized the final refinement layer ({len(current)} candidate(s))."
+            final, note, outputs = self._finalize_synthesis_result(
+                synthesis,
+                len(current),
+                structured_synthesis,
+                plain_success=(
+                    f"Synthesized the final refinement layer ({len(current)} candidate(s))."
+                ),
+                structured_success=(
+                    f"Structured synthesis parsed the final refinement layer "
+                    f"({len(current)} candidate(s))."
+                ),
+            )
         else:
             final = self._deterministic_best(current).content
             note = f"Final synthesis failed: {synthesis.error or 'empty response'}"
+            outputs = {}
         return FusionResult(
             strategy="layered_refinement",
             final=final,
@@ -892,6 +1916,7 @@ class FusionEngine:
             judge_analysis=note,
             candidates=self._visible_candidates(all_candidates),
             usage=usage,
+            workflow_outputs=outputs,
         )
 
     async def _fallback(
@@ -940,10 +1965,18 @@ class FusionEngine:
         budget: CallBudget,
         trace: list[WorkflowStep],
         stage: str,
+        structured_synthesis: bool = False,
     ) -> CandidateResult:
         request = ProviderRequest(
             messages=[
-                ChatMessage(role="system", content=PARALLEL_SYNTHESIS_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="system",
+                    content=(
+                        STRUCTURED_SYNTHESIS_SYSTEM_PROMPT
+                        if structured_synthesis
+                        else PARALLEL_SYNTHESIS_SYSTEM_PROMPT
+                    ),
+                ),
                 ChatMessage(role="user", content=self._build_synthesis_prompt(messages, candidates)),
             ],
             temperature=self.config.fusion.judge_temperature,
@@ -1077,6 +2110,12 @@ class FusionEngine:
 
         samples = max(1, samples_per_provider)
         rounds = max(0, refinement_rounds)
+        self_moa_ready = bool(
+            self.config.fusion.self_moa_provider
+            and budget.limit >= max(1, self.config.fusion.self_moa_samples) + 1
+        )
+        cascade_ready = bool(self.config.fusion.cascade_providers or len(panel) > 1)
+
         if explicit_refinement:
             strategy = "layered_refinement"
             rounds = max(1, rounds)
@@ -1086,6 +2125,10 @@ class FusionEngine:
             if len(panel) * samples < 3:
                 samples = max(1, (3 + max(1, len(panel)) - 1) // max(1, len(panel)))
             rationale = "A concise or multiple-choice task is suitable for consensus voting."
+        elif code_or_math and self_moa_ready:
+            strategy = "self_moa"
+            samples = max(1, self.config.fusion.self_moa_samples)
+            rationale = "A configured strong provider can use independent self-sampling."
         elif code_or_math:
             strategy = "best_of_n"
             if len(panel) * samples < 2:
@@ -1094,6 +2137,9 @@ class FusionEngine:
         elif complex_analysis and len(prompt) >= 80:
             strategy = "critique_revision"
             rationale = "The task benefits from independent drafts followed by critique and revision."
+        elif len(prompt) < 180 and cascade_ready:
+            strategy = "uncertainty_cascade"
+            rationale = "A simple request can start with a cheaper provider and escalate only if uncertain."
         elif len(prompt) < 180:
             strategy = "fallback"
             rationale = "The request appears simple, so a single successful provider minimizes latency."
@@ -1199,10 +2245,14 @@ class FusionEngine:
         samples_per_provider: int,
         refinement_rounds: int,
         max_total_calls: int,
+        self_moa_samples: int | None = None,
     ) -> OrchestrationPlan:
-        samples_per_provider = self._effective_samples_for_strategy(
-            strategy, panel, samples_per_provider
-        )
+        if strategy in {"self_moa", "self_moa_seq"}:
+            samples_per_provider = max(1, self_moa_samples or samples_per_provider)
+        else:
+            samples_per_provider = self._effective_samples_for_strategy(
+                strategy, panel, samples_per_provider
+            )
         return OrchestrationPlan(
             strategy=strategy,
             panel=panel,
@@ -1233,6 +2283,14 @@ class FusionEngine:
         drafts = panel_size * max(1, samples_per_provider)
         if strategy == "fallback":
             return panel_size
+        if strategy in {"self_moa", "self_moa_seq"}:
+            return max(1, samples_per_provider) + 1
+        if strategy == "pairwise_rank_fuse":
+            return drafts + 2
+        if strategy == "semantic_vote":
+            return drafts
+        if strategy == "uncertainty_cascade":
+            return panel_size
         if strategy in {"parallel_synthesis", "best_of_n"}:
             return drafts + 1
         if strategy in {"majority_vote", "weighted_vote"}:
@@ -1251,7 +2309,7 @@ class FusionEngine:
     ) -> int:
         panel_size = max(1, len(panel))
         minimum_total = 1
-        if strategy in {"best_of_n", "weighted_vote"}:
+        if strategy in {"best_of_n", "weighted_vote", "semantic_vote"}:
             minimum_total = 2
         elif strategy == "majority_vote":
             minimum_total = 3
@@ -1272,12 +2330,47 @@ class FusionEngine:
             extra_body=extra_body or {},
         )
 
+    def _cascade_request(
+        self,
+        messages: list[ChatMessage],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+    ) -> ProviderRequest:
+        return ProviderRequest(
+            messages=[
+                ChatMessage(role="system", content=CASCADE_SYSTEM_PROMPT),
+                *messages,
+            ],
+            temperature=temperature if temperature is not None else self.config.fusion.temperature,
+            max_tokens=max_tokens if max_tokens is not None else self.config.fusion.max_tokens,
+            extra_body=extra_body or {},
+        )
+
     def _panel_names(self, panel: Iterable[str] | None) -> list[str]:
         selected = list(panel) if panel is not None else list(self.config.fusion.panel)
         if not selected:
             selected = list(self.providers.keys())
         # Stable de-duplication protects budgets from accidental repeated names.
         return list(dict.fromkeys(selected))
+
+    def _cascade_provider_names(
+        self,
+        requested: Iterable[str] | None,
+        panel: list[str],
+    ) -> list[str]:
+        selected = (
+            list(requested)
+            if requested is not None
+            else list(self.config.fusion.cascade_providers)
+        )
+        if not selected:
+            selected = panel or list(self.providers.keys())
+        selected = list(dict.fromkeys(selected))
+        missing = [name for name in selected if name not in self.providers]
+        if missing:
+            raise ValueError(f"Cascade providers not found or not enabled: {', '.join(missing)}")
+        return selected
 
     @staticmethod
     def _successes(candidates: list[CandidateResult]) -> list[CandidateResult]:
@@ -1298,6 +2391,93 @@ class FusionEngine:
         if panel:
             return panel[0]
         raise ValueError("No enabled provider is available for the requested workflow role")
+
+    def _panel_role(self, call_index: int):
+        roles = self.config.fusion.panel_roles
+        if not roles:
+            return None
+        return roles[call_index % len(roles)]
+
+    def _role_messages(
+        self,
+        messages: list[ChatMessage],
+        role_name: str,
+        instruction: str,
+    ) -> list[ChatMessage]:
+        role_instruction = ChatMessage(
+            role="system",
+            content=(
+                f"OpenFusion panel role: {role_name}. Follow this public role instruction: "
+                f"{instruction.strip()} Do not mention the role name unless it is directly useful, "
+                "and do not expose hidden chain-of-thought."
+            ),
+        )
+        split = 0
+        while split < len(messages) and messages[split].role in {"system", "developer"}:
+            split += 1
+        return [*messages[:split], role_instruction, *messages[split:]]
+
+    def _self_moa_role_provider(
+        self,
+        requested: str | None,
+        judge_provider: str | None,
+        panel: list[str],
+    ) -> str:
+        for provider_name in (
+            requested,
+            self.config.fusion.self_moa_provider,
+            judge_provider,
+            self.config.fusion.judge_provider,
+            panel[0] if panel else None,
+        ):
+            if provider_name:
+                return provider_name
+        if self.providers:
+            return next(iter(self.providers))
+        raise ValueError("No enabled provider is available for Self-MoA")
+
+    def _append_self_moa_summary(
+        self,
+        trace: list[WorkflowStep],
+        provider_name: str,
+        sample_count: int,
+        mode: str,
+        budget: CallBudget,
+    ) -> None:
+        model = self.providers[provider_name].config.model if provider_name in self.providers else "unknown"
+        trace.append(
+            WorkflowStep(
+                stage="self_moa_summary",
+                provider=provider_name,
+                model=model,
+                status="ok",
+                note=(
+                    f"provider={provider_name}; samples={sample_count}; mode={mode}; "
+                    f"call_count={budget.used}/{budget.limit}"
+                ),
+            )
+        )
+
+    def _carry_candidate(
+        self,
+        candidate: CandidateResult,
+        provider_name: str,
+        sample_index: int,
+    ) -> CandidateResult:
+        content = self._truncate_carry(candidate.content)
+        model = self.providers[provider_name].config.model if provider_name in self.providers else candidate.model
+        return CandidateResult(
+            provider=provider_name,
+            model=model,
+            weight=candidate.weight,
+            content=content,
+            ok=bool(content.strip()),
+            error=None if content.strip() else candidate.error,
+            latency_ms=candidate.latency_ms,
+            usage=candidate.usage,
+            stage="self_moa_seq_carry",
+            sample_index=sample_index,
+        )
 
     def _sampling_messages(
         self,
@@ -1417,8 +2597,9 @@ class FusionEngine:
                     }
                 )
         schema = {
-            "strategy": "one of fallback, parallel_synthesis, best_of_n, majority_vote, "
-            "weighted_vote, critique_revision, layered_refinement",
+            "strategy": "one of fallback, parallel_synthesis, self_moa, self_moa_seq, best_of_n, "
+            "pairwise_rank_fuse, semantic_vote, majority_vote, weighted_vote, "
+            "uncertainty_cascade, critique_revision, layered_refinement",
             "panel": ["enabled provider names only"],
             "judge_provider": "enabled provider name or null",
             "critic_provider": "enabled provider name or null",
@@ -1432,6 +2613,136 @@ class FusionEngine:
             f"Remaining model-call budget after planning: {remaining_calls}\n"
             f"Required JSON shape: {json.dumps(schema)}\n\n"
             f"User conversation:\n{self._conversation_transcript(messages)}"
+        )
+
+    def _build_score_ranking_prompt(
+        self,
+        messages: list[ChatMessage],
+        candidates: list[CandidateResult],
+    ) -> str:
+        parts = [
+            "Conversation transcript:",
+            self._conversation_transcript(messages),
+            "",
+            "Score each candidate from 0.0 to 1.0 and return strict JSON:",
+            '{"rankings":[{"candidate":1,"score":0.0}]}',
+            "",
+            "Candidate answers:",
+        ]
+        parts.extend(self._render_candidates(candidates))
+        return "\n".join(parts)
+
+    def _build_pairwise_ranking_prompt(
+        self,
+        messages: list[ChatMessage],
+        left: CandidateResult,
+        right: CandidateResult,
+    ) -> str:
+        parts = [
+            "Conversation transcript:",
+            self._conversation_transcript(messages),
+            "",
+            "Choose the better candidate. Return strict JSON only:",
+            '{"winner":1,"score_1":0.0,"score_2":0.0}',
+            "",
+            "Candidates:",
+        ]
+        parts.extend(self._render_candidates([left, right]))
+        return "\n".join(parts)
+
+    def _build_equivalence_prompt(
+        self,
+        messages: list[ChatMessage],
+        candidate: CandidateResult,
+        representative: CandidateResult,
+    ) -> str:
+        return "\n".join(
+            [
+                "Conversation transcript:",
+                self._conversation_transcript(messages),
+                "",
+                "Do these concise answers mean the same answer for the user's request?",
+                "Return strict JSON only: {\"equivalent\": true}",
+                "",
+                f"Answer A:\n{self._truncate_for_judge(candidate.content.strip())}",
+                "",
+                f"Answer B:\n{self._truncate_for_judge(representative.content.strip())}",
+            ]
+        )
+
+    def _append_ranking_summary(
+        self,
+        trace: list[WorkflowStep],
+        ranker_provider: str,
+        summary: dict[str, Any],
+    ) -> None:
+        trace.append(
+            WorkflowStep(
+                stage="ranking_summary",
+                provider=ranker_provider,
+                model=(
+                    self.providers[ranker_provider].config.model
+                    if ranker_provider in self.providers
+                    else None
+                ),
+                status="ok",
+                note=json.dumps(summary, ensure_ascii=False)[:300],
+            )
+        )
+
+    def _cascade_decision(
+        self,
+        candidates: list[CandidateResult],
+        confidence_threshold: float,
+    ) -> tuple[bool, str, float, bool]:
+        if not candidates:
+            return False, "provider_failed", 0.0, False
+        confidences = [
+            float(candidate.metadata["confidence"])
+            for candidate in candidates
+            if candidate.ok and "confidence" in candidate.metadata
+        ]
+        if len(confidences) < len(candidates):
+            return False, "invalid_format", max(confidences or [0.0]), False
+        confidence = min(confidences)
+        if confidence < confidence_threshold:
+            return False, "low_confidence", confidence, False
+        disagreement = False
+        if len(candidates) > 1:
+            keys = {self._vote_key(candidate.content, None) for candidate in candidates}
+            disagreement = len(keys) > 1
+            if disagreement and self.config.fusion.cascade_escalate_on_disagreement:
+                return False, "sample_disagreement", confidence, True
+        return True, "accepted", confidence, disagreement
+
+    def _append_cascade_decision(
+        self,
+        trace: list[WorkflowStep],
+        provider_name: str,
+        step_index: int,
+        confidence: float,
+        disagreement: bool,
+        escalation_reason: str | None,
+    ) -> None:
+        summary = {
+            "provider_attempted": provider_name,
+            "step": step_index,
+            "confidence": confidence,
+            "disagreement": disagreement,
+            "escalation_reason": escalation_reason,
+        }
+        trace.append(
+            WorkflowStep(
+                stage="cascade_decision",
+                provider=provider_name,
+                model=(
+                    self.providers[provider_name].config.model
+                    if provider_name in self.providers
+                    else None
+                ),
+                status="ok" if escalation_reason is None else "fallback",
+                note=json.dumps(summary, ensure_ascii=False),
+            )
         )
 
     def _render_candidates(self, candidates: list[CandidateResult]) -> list[str]:
@@ -1465,6 +2776,172 @@ class FusionEngine:
             return content
         omitted = len(content) - limit
         return f"{content[:limit]}\n[truncated {omitted} characters before orchestration]"
+
+    def _truncate_carry(self, content: str) -> str:
+        limit = max(200, self.config.fusion.self_moa_seq_carry_max_chars)
+        if len(content) <= limit:
+            return content
+        marker = f"\n[omitted {len(content) - limit} middle characters before carry-forward]\n"
+        keep = max(1, (limit - len(marker)) // 2)
+        return f"{content[:keep]}{marker}{content[-keep:]}"
+
+    def _finalize_synthesis_result(
+        self,
+        synthesis: CandidateResult,
+        candidate_count: int,
+        structured_synthesis: bool,
+        plain_success: str | None = None,
+        structured_success: str | None = None,
+    ) -> tuple[str, str, dict[str, str]]:
+        plain_success = plain_success or f"Synthesized {candidate_count} independent candidate(s)."
+        structured_success = structured_success or (
+            f"Structured synthesis parsed {candidate_count} independent candidate(s)."
+        )
+        if not structured_synthesis:
+            return synthesis.content, plain_success, {}
+
+        parsed = self._parse_structured_synthesis(synthesis.content)
+        if parsed is None:
+            return (
+                synthesis.content,
+                "Structured synthesis parsing failed; returned plain synthesis.",
+                {},
+            )
+
+        outputs = parsed if self.config.fusion.include_workflow_outputs else {}
+        return (
+            parsed["final_answer"],
+            structured_success,
+            outputs,
+        )
+
+    @staticmethod
+    def _parse_structured_synthesis(content: str) -> dict[str, str] | None:
+        data = _extract_json_object(content)
+        if data is None:
+            return None
+        required = (
+            "consensus_points",
+            "contradictions",
+            "unique_insights",
+            "missing_information",
+            "final_answer",
+        )
+        parsed: dict[str, str] = {}
+        for key in required:
+            if key not in data:
+                return None
+            rendered = FusionEngine._render_structured_section(data[key]).strip()
+            if key == "final_answer" and not rendered:
+                return None
+            parsed[key] = rendered
+        return parsed
+
+    @staticmethod
+    def _render_structured_section(value: Any) -> str:
+        if isinstance(value, list):
+            return "\n".join(str(item).strip() for item in value if str(item).strip())
+        if value is None:
+            return ""
+        return str(value)
+
+    @staticmethod
+    def _parse_score_ranking(content: str, candidate_count: int) -> list[float] | None:
+        data = _extract_json_object(content)
+        scores: dict[int, float] = {}
+        if data is not None:
+            rankings = data.get("rankings", data.get("scores"))
+            if isinstance(rankings, list):
+                for item in rankings:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        candidate_index = int(item.get("candidate", item.get("index"))) - 1
+                        score = float(item.get("score"))
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= candidate_index < candidate_count:
+                        scores[candidate_index] = score
+            elif isinstance(rankings, dict):
+                for key, value in rankings.items():
+                    try:
+                        candidate_index = int(str(key).removeprefix("candidate_")) - 1
+                        score = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= candidate_index < candidate_count:
+                        scores[candidate_index] = score
+        if len(scores) < candidate_count:
+            for match in re.finditer(
+                r"(?:candidate\s*)?(\d+)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)",
+                content,
+                flags=re.IGNORECASE,
+            ):
+                candidate_index = int(match.group(1)) - 1
+                if 0 <= candidate_index < candidate_count:
+                    scores[candidate_index] = float(match.group(2))
+        if not scores:
+            return None
+        return [scores.get(index, 0.0) for index in range(candidate_count)]
+
+    @staticmethod
+    def _parse_pairwise_winner(content: str) -> int | None:
+        data = _extract_json_object(content)
+        if data is not None:
+            try:
+                winner = int(data.get("winner"))
+            except (TypeError, ValueError):
+                winner = 0
+            if winner in {1, 2}:
+                return winner
+        match = re.search(r"\bwinner\s*[:=]\s*([12])\b", content, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        match = re.search(r"\bcandidate\s*([12])\b", content, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+
+    @staticmethod
+    def _parse_equivalence(content: str) -> bool:
+        data = _extract_json_object(content)
+        if data is not None:
+            value = data.get("equivalent")
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.strip().casefold() in {"true", "yes", "same", "equivalent"}
+        normalized = content.strip().casefold()
+        return bool(re.search(r"\b(yes|true|same|equivalent)\b", normalized))
+
+    @staticmethod
+    def _parse_cascade_response(content: str) -> tuple[str | None, float]:
+        data = _extract_json_object(content)
+        if data is not None:
+            answer = data.get("answer", data.get("final_answer"))
+            confidence = data.get("confidence")
+            try:
+                parsed_confidence = float(confidence)
+            except (TypeError, ValueError):
+                parsed_confidence = -1.0
+            if isinstance(answer, str) and answer.strip() and 0 <= parsed_confidence <= 1:
+                return answer.strip(), parsed_confidence
+        confidence_match = re.search(
+            r"\bconfidence\s*[:=]\s*([01](?:\.\d+)?)",
+            content,
+            flags=re.IGNORECASE,
+        )
+        if not confidence_match:
+            return None, 0.0
+        confidence = float(confidence_match.group(1))
+        answer = re.sub(
+            r"\bconfidence\s*[:=]\s*[01](?:\.\d+)?",
+            "",
+            content,
+            flags=re.IGNORECASE,
+        ).strip()
+        answer = re.sub(r"^(?:answer|final answer)\s*[:\-]\s*", "", answer, flags=re.IGNORECASE)
+        return (answer if answer else None), confidence
 
     @staticmethod
     def _parse_selection(content: str, candidate_count: int) -> tuple[int, str] | None:

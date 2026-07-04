@@ -1,4 +1,4 @@
-# OpenFusion v0.2 configuration.
+# OpenFusion v0.4 configuration.
 # After `openfusion init --path openfusion.yaml`, edit openfusion.yaml (not this template)
 # and make each model name match the model server you actually use.
 providers:
@@ -45,30 +45,58 @@ providers:
       X-Title: OpenFusion
 
 fusion:
-  # Supported: fallback, parallel_synthesis, best_of_n, majority_vote,
-  # weighted_vote, critique_revision, layered_refinement, adaptive.
+  # Supported: fallback, parallel_synthesis, self_moa, self_moa_seq,
+  # pairwise_rank_fuse, semantic_vote, uncertainty_cascade, best_of_n,
+  # majority_vote, weighted_vote, critique_revision, layered_refinement, adaptive.
   default_strategy: parallel_synthesis
   panel: [local-ollama]
+  panel_roles:
+    - name: factual_checker
+      instruction: Focus on factual accuracy and cite uncertainty.
+    - name: edge_case_reviewer
+      instruction: Focus on edge cases, failure modes, and missing assumptions.
+    - name: concise_summarizer
+      instruction: Produce the clearest concise answer.
 
   # These roles may use the same model or different specialist models.
   judge_provider: local-ollama
   critic_provider: local-ollama
   reviser_provider: local-ollama
   planner_provider:
+  self_moa_provider:
+  ranker_provider:
+  fuser_provider:
+  vote_equivalence_provider:
+  cascade_providers: [local-ollama]
 
   max_parallel: 2
   max_total_calls: 8
   samples_per_provider: 1
   refinement_rounds: 1
+  self_moa_samples: 3
+  self_moa_batch_size: 4
+  self_moa_seq_carry_max_chars: 12000
+  rank_top_k: 3
+  pairwise_rank_max_pairs: 12
+  semantic_vote_max_pairs: 12
+  cascade_consistency_samples: 1
+  cascade_max_steps: 3
 
   temperature: 0.2
   judge_temperature: 0.1
   critique_temperature: 0.1
+  self_moa_temperature: 0.7
+  self_moa_mode: synthesize
+  pairwise_rank_mode: pairwise
+  semantic_vote_mode: rule_only
+  cascade_confidence_threshold: 0.75
+  cascade_escalate_on_disagreement: true
   max_tokens: 256
 
   require_at_least_successes: 1
   include_candidate_outputs: true
   include_workflow_outputs: true
+  structured_synthesis: false
   judge_candidate_max_chars: 4000
   transcript_max_chars: 12000
   vote_answer_regex:

@@ -24,7 +24,7 @@ def test_health_and_models() -> None:
     health_payload = health.json()
     assert health_payload["ok"] is True
     assert health_payload["providers"] == ["local"]
-    assert health_payload["version"] == "0.2.1"
+    assert health_payload["version"] == "0.4.0"
     assert "adaptive" in health_payload["strategies"]
 
     models = client.get("/v1/models")
@@ -32,6 +32,11 @@ def test_health_and_models() -> None:
     model_ids = [item["id"] for item in models.json()["data"]]
     assert "openfusion/panel-judge" in model_ids
     assert "openfusion/parallel-synthesis" in model_ids
+    assert "openfusion/self-moa" in model_ids
+    assert "openfusion/self-moa-seq" in model_ids
+    assert "openfusion/pairwise-rank-fuse" in model_ids
+    assert "openfusion/semantic-vote" in model_ids
+    assert "openfusion/uncertainty-cascade" in model_ids
     assert "openfusion/critique-revision" in model_ids
     assert "openfusion/adaptive" in model_ids
     assert "openfusion/fallback" in model_ids
@@ -275,3 +280,72 @@ def test_strategy_models_and_unknown_model_validation() -> None:
     )
     assert unknown.status_code == 400
     assert "Unknown model ID" in unknown.json()["detail"]
+
+
+def test_self_moa_model_ids_route_chat_completions() -> None:
+    provider = StaticProvider(
+        ProviderConfig(name="local", base_url="http://local", model="qwen"),
+        "Answer.",
+    )
+    config = AppConfig(
+        providers=[ProviderConfig(name="local", base_url="http://local", model="qwen")],
+        fusion=FusionConfig(panel=["local"], self_moa_samples=1),
+    )
+    client = TestClient(create_app(config, providers={"local": provider}))
+
+    for model_id, strategy in (
+        ("openfusion/self-moa", "self_moa"),
+        ("openfusion/self-moa-seq", "self_moa_seq"),
+    ):
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": model_id,
+                "messages": [{"role": "user", "content": "hello"}],
+                "fusion_self_moa_samples": 1,
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["choices"][0]["message"]["content"] == "Answer."
+        assert payload["openfusion"]["strategy"] == strategy
+
+
+def test_chat_completions_structured_synthesis_override() -> None:
+    structured = (
+        '{"consensus_points":["same"],"contradictions":[],"unique_insights":[],'
+        '"missing_information":[],"final_answer":"Structured final."}'
+    )
+    providers = {
+        "local": StaticProvider(
+            ProviderConfig(name="local", base_url="http://local", model="qwen"),
+            "Draft.",
+        ),
+        "judge": StaticProvider(
+            ProviderConfig(name="judge", base_url="http://judge", model="judge"),
+            structured,
+        ),
+    }
+    config = AppConfig(
+        providers=[
+            ProviderConfig(name="local", base_url="http://local", model="qwen"),
+            ProviderConfig(name="judge", base_url="http://judge", model="judge"),
+        ],
+        fusion=FusionConfig(panel=["local"], judge_provider="judge", structured_synthesis=False),
+    )
+    client = TestClient(create_app(config, providers=providers))
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openfusion/parallel-synthesis",
+            "messages": [{"role": "user", "content": "hello"}],
+            "fusion_structured_synthesis": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["choices"][0]["message"]["content"] == "Structured final."
+    assert payload["openfusion"]["workflow_outputs"]["consensus_points"] == "same"

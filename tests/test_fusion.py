@@ -119,6 +119,33 @@ async def test_include_candidate_outputs_false_redacts_all_paths() -> None:
 
 
 @pytest.mark.asyncio
+async def test_self_moa_candidate_outputs_are_redacted() -> None:
+    providers = {
+        "a": StaticProvider(
+            ProviderConfig(name="a", base_url="http://a", model="model-a"),
+            "Secret self-MoA sample.",
+        ),
+    }
+    config = AppConfig(
+        providers=[ProviderConfig(name="a", base_url="http://a", model="model-a")],
+        fusion=FusionConfig(
+            panel=["a"],
+            self_moa_samples=1,
+            include_candidate_outputs=False,
+        ),
+    )
+
+    result = await FusionEngine(config, providers=providers).run(
+        [ChatMessage(role="user", content="Test")],
+        strategy="self_moa",
+    )
+
+    assert result.final == "Secret self-MoA sample."
+    assert len(result.candidates) == 1
+    assert result.candidates[0].content == ""
+
+
+@pytest.mark.asyncio
 async def test_judge_failure_gracefully_returns_best_candidate() -> None:
     providers = {
         "short": StaticProvider(

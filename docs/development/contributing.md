@@ -1,13 +1,11 @@
 # Contributing
 
-Before opening a pull request, run:
+Run before submitting changes:
 
-```powershell
+```bash
 python -m compileall -q src tests
 ruff check src tests
 pytest -q --basetemp .pytest-tmp
 python -m build
-git diff --check
+mkdocs build --strict
 ```
-
-Do not commit local `.env`, `openfusion.yaml`, benchmark results, virtual environments, build artifacts, or cache folders.

@@ -41,11 +41,3 @@ openfusion --help
 openfusion strategies
 openfusion lab --help
 ```
-
-## Install from a release wheel
-
-Download the `.whl` file from the GitHub release page, then install it:
-
-```powershell
-python -m pip install open_fusion_ai-0.5.2-py3-none-any.whl
-```

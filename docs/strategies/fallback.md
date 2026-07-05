@@ -1,7 +1,5 @@
 # Fallback
 
-`fallback` tries configured providers in order until one succeeds. It is a reliability baseline and a useful operational comparison point.
+Try providers in order until one succeeds. Useful as a simple operational baseline.
 
-## Evaluation advice
-
-Always compare this strategy against the best single-model baseline, fallback, latency, calls, and token usage.
+Always compare this strategy against the best single-model baseline and report latency, calls, and tokens.

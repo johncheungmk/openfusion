@@ -1,33 +1,12 @@
 # Evaluation Methodology
 
-OpenFusion is designed to make fusion claims testable.
+Recommended comparisons:
 
-## Required comparisons
+1. Each original model alone.
+2. The best single-model baseline.
+3. Fallback baseline.
+4. Self-MoA / same-model test-time compute.
+5. Mixed-model fusion.
+6. Equal-budget alternatives.
 
-A responsible fusion experiment should compare:
-
-1. model A alone;
-2. model B alone;
-3. best single-model baseline;
-4. fallback;
-5. Self-MoA using the best model;
-6. mixed-model fusion;
-7. uncertainty cascade when latency/cost matters.
-
-## Required metrics
-
-Report:
-
-- accuracy or win rate;
-- delta versus fallback in percentage points;
-- delta versus best single model in percentage points;
-- relative accuracy improvement;
-- average and p95 latency;
-- model calls per example;
-- tokens per example;
-- accuracy per call;
-- accuracy per 1k tokens.
-
-## Negative results
-
-If fusion does not improve over the best single model, say so. Negative results are useful because they help identify when the extra calls and latency are not justified.
+Report accuracy or win rate together with latency, calls, tokens, and failures.

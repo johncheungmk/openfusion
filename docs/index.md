@@ -28,5 +28,5 @@ OpenFusion is not a replacement for LiteLLM. LiteLLM is better suited for provid
 2. Start Ollama.
 3. Pull two small models.
 4. Run a local benchmark with OpenFusion Lab.
-5. Compare fusion strategies against each base model.
+5. Compare strategies against each base model and the best single-model baseline.
 6. Interpret accuracy together with latency, calls, and token usage.

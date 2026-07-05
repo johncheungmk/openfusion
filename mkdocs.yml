@@ -1,0 +1,91 @@
+site_name: OpenFusion
+site_description: Open-source multi-model orchestration and fusion runtime for local and cloud LLMs.
+site_url: https://johncheungmk.github.io/openfusion/
+repo_url: https://github.com/johncheungmk/openfusion
+repo_name: johncheungmk/openfusion
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart with Ollama: getting-started/quickstart-ollama.md
+      - First Fusion Test: getting-started/first-fusion-test.md
+  - Concepts:
+      - What is Model Fusion?: concepts/model-fusion.md
+      - Mixture-of-Agents: concepts/mixture-of-agents.md
+      - Strategies: concepts/strategies.md
+      - Evaluation Methodology: concepts/evaluation-methodology.md
+  - Configuration:
+      - openfusion.yaml: configuration/openfusion-yaml.md
+      - lab.yaml: configuration/lab-yaml.md
+      - Providers: configuration/providers.md
+      - Environment Variables: configuration/environment-variables.md
+  - OpenFusion Lab:
+      - Overview: lab/overview.md
+      - Local Benchmark Cookbook: lab/local-benchmark-cookbook.md
+      - Baseline Comparison: lab/baseline-comparison.md
+      - Result Card: lab/result-card.md
+      - Leaderboard Format: lab/leaderboard-format.md
+  - Strategies:
+      - Fallback: strategies/fallback.md
+      - Self-MoA: strategies/self-moa.md
+      - Semantic Vote: strategies/semantic-vote.md
+      - Parallel Synthesis: strategies/parallel-synthesis.md
+      - Pairwise Rank Fuse: strategies/pairwise-rank-fuse.md
+      - Uncertainty Cascade: strategies/uncertainty-cascade.md
+  - Deployment:
+      - API Server: deployment/serve-api.md
+      - Docker: deployment/docker.md
+      - Dify Integration: deployment/dify-integration.md
+      - LiteLLM Integration: deployment/litellm-integration.md
+  - Research:
+      - Related Work: research/related-work.md
+      - Benchmarking: research/benchmarks.md
+      - Reporting Results: research/reporting-results.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Codex Workflow: development/codex-workflow.md
+      - Release Process: development/release-process.md
+  - Troubleshooting:
+      - Windows: troubleshooting/windows.md
+      - Ollama: troubleshooting/ollama.md
+      - JSONL BOM Errors: troubleshooting/jsonl-bom.md
+      - Slow CPU Models: troubleshooting/slow-cpu-models.md

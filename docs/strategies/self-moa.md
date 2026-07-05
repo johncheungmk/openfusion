@@ -1,7 +1,5 @@
 # Self-MoA
 
-`self_moa` samples one provider multiple times, then selects or synthesizes. It is useful for testing whether repeated sampling from the best model beats mixed-model fusion.
+Sample one provider multiple times, then select or synthesize. Useful for testing same-model test-time compute.
 
-## Evaluation advice
-
-Always compare this strategy against the best single-model baseline, fallback, latency, calls, and token usage.
+Always compare this strategy against the best single-model baseline and report latency, calls, and tokens.

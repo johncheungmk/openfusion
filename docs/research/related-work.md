@@ -1,12 +1,5 @@
 # Related Work
 
-OpenFusion is related to several research and product directions:
+OpenFusion is related to Mixture-of-Agents, Self-MoA, LLM-Blender, OpenRouter Fusion, uncertainty cascades, and adaptive orchestration research.
 
-- Mixture-of-Agents and layered refinement.
-- Self-consistency and Self-MoA.
-- LLM-Blender and pairwise ranking plus generative fusion.
-- OpenRouter Fusion and commercial compound synthesis systems.
-- Sakana Fugu and learned orchestration.
-- LiteLLM and model gateway infrastructure.
-
-OpenFusion focuses on transparent, self-hostable experimentation rather than claiming proprietary benchmark results.
+OpenFusion does not claim the same benchmark results as commercial or academic systems. It provides a transparent runtime for local experiments.

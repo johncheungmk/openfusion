@@ -3,11 +3,19 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.pytest-tmp-*/
+.validation-temp*/
 .ruff_cache/
 .venv/
 venv/
 dist/
+dist.*/
 build/
+site/
+site.*/
+.release-dist*/
+.release-site*/
+.release-venv*/
 
 # Local config/secrets
 .env

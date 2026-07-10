@@ -1,4 +1,4 @@
-# OpenFusion v0.2 architecture
+# OpenFusion v0.6 architecture
 
 OpenFusion is an inference-time multi-model orchestration runtime. It does not merge model weights and it does not train a proprietary orchestration policy.
 
@@ -31,7 +31,11 @@ OpenAI-compatible request
 
 ### Call budget
 
-Every orchestrated request receives a `CallBudget`. Each provider call must reserve one unit before execution. When the budget is exhausted, the step is recorded as skipped rather than silently creating more cost.
+Every orchestrated request receives a `CallBudget`. The configured
+`fusion.max_total_calls` is an administrator ceiling: request overrides may lower it but
+cannot raise it. Candidate and pair-comparison work is bounded before coroutine/task
+creation, and each provider call must reserve one unit before execution. When the budget
+is exhausted, the step is recorded as skipped rather than silently creating more cost.
 
 The budget limits model calls, not tokens. Provider-level token, rate, and financial limits should still be enforced by the upstream gateway.
 
@@ -46,6 +50,10 @@ When a workflow requests more than one sample, OpenFusion inserts a neutral samp
 - `majority_vote` and `weighted_vote` group normalized answers. They are intended for concise or regex-extractable answers, not long prose.
 - `critique_revision` separates the critic and reviser roles.
 - `layered_refinement` exposes one layer's outputs to the next layer before final synthesis.
+- `self_moa` and `self_moa_seq` aggregate repeated samples from one provider.
+- `pairwise_rank_fuse` ranks candidates before synthesizing the top set.
+- `semantic_vote` adds bounded rule-only or LLM-assisted equivalence grouping.
+- `uncertainty_cascade` escalates through a bounded provider sequence.
 
 ### Adaptive planning
 
@@ -58,7 +66,10 @@ A model plan can select only built-in strategies and enabled provider names. It 
 
 ### Public trace
 
-The response trace records stages, provider/model names, success status, latency, and bounded error messages. It does not request or expose hidden chain-of-thought. Candidate and workflow text can be suppressed independently.
+The response trace records stages, configured and provider-reported model names, call
+status, latency, token use, optional estimated cost, and bounded error messages. It does
+not request or expose hidden chain-of-thought. Candidate and workflow text can be
+suppressed independently.
 
 ## Strategy call shapes
 
@@ -89,7 +100,10 @@ adaptive
 ## Deliberate limitations
 
 - Fake streaming emits the completed result as SSE; provider tokens are not streamed through each workflow stage.
-- OpenFusion does not execute arbitrary model-requested tools in v0.2.
-- Voting uses normalized textual agreement, not semantic clustering.
-- The built-in evaluator is exact match and is not a general quality judge.
+- OpenFusion does not execute arbitrary model-requested tools.
+- `majority_vote` and `weighted_vote` use normalized textual agreement;
+  `semantic_vote` provides a separate bounded equivalence mode.
+- Exact/regex graders are objective only for suitable tasks. Optional LLM graders are
+  fallible model outputs; the order-balanced mode mitigates position bias but does not
+  turn them into ground truth.
 - Adaptive heuristics are transparent rules, not learned reinforcement-learning orchestration.

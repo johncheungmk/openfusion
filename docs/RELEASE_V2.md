@@ -1,5 +1,10 @@
 # Publishing OpenFusion v0.2.0 to GitHub
 
+!!! warning "Historical v0.2 release instructions"
+    This page documents the v0.2.0 release only. Do not use its filenames, branch names, version
+    numbers, or replacement procedure for a current release. Follow the maintained
+    [release process](development/release-process.md) instead.
+
 Use a release branch in a fresh clone. This avoids mixing old generated files, local secrets, or virtual environments into the release.
 
 The examples assume the downloaded source archive is named `openfusion-v0.2.0-source.zip` and contains a top-level `openfusion/` directory.

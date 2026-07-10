@@ -1,5 +1,10 @@
 # Codex CLI prompt: upgrade an existing OpenFusion v0.1 checkout to v0.2
 
+!!! warning "Historical v0.2 implementation brief"
+    This archived prompt records the intended v0.2 change set. Do not run it against a current
+    checkout: it can overwrite or omit behavior added in later releases. Use the current
+    [architecture](ARCHITECTURE.md) and [release process](development/release-process.md) instead.
+
 Paste the following prompt into Codex CLI from the repository root.
 
 ```text

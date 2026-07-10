@@ -24,7 +24,7 @@ def test_health_and_models() -> None:
     health_payload = health.json()
     assert health_payload["ok"] is True
     assert health_payload["providers"] == ["local"]
-    assert health_payload["version"] == "0.5.2"
+    assert health_payload["version"] == "0.6.0"
     assert "adaptive" in health_payload["strategies"]
 
     models = client.get("/v1/models")
@@ -247,6 +247,38 @@ def test_openai_compatible_request_extra_fields_are_forwarded() -> None:
     }
     assert provider.last_request.messages[0].name == "tester"
     assert provider.last_request.messages[0].tool_call_id == "call_123"
+
+
+def test_request_rejects_discarded_multiple_choices_and_invalid_fusion_bounds() -> None:
+    provider = StaticProvider(
+        ProviderConfig(name="local", base_url="http://local", model="qwen"),
+        "Answer.",
+    )
+    config = AppConfig(
+        providers=[ProviderConfig(name="local", base_url="http://local", model="qwen")],
+        fusion=FusionConfig(panel=["local"]),
+    )
+    client = TestClient(create_app(config, providers={"local": provider}))
+
+    multiple = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "provider/local/qwen",
+            "messages": [{"role": "user", "content": "hello"}],
+            "n": 2,
+        },
+    )
+    invalid_budget = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openfusion/fallback",
+            "messages": [{"role": "user", "content": "hello"}],
+            "fusion_max_total_calls": 0,
+        },
+    )
+
+    assert multiple.status_code == 422
+    assert invalid_budget.status_code == 422
 
 
 def test_strategy_models_and_unknown_model_validation() -> None:

@@ -214,7 +214,9 @@ def evaluate(
     judge: str | None = typer.Option(None, help="Judge/selector provider."),
     grader: str = typer.Option(
         "exact_match",
-        help="Grader: exact_match, regex, llm_pairwise, or llm_rubric.",
+        help=(
+            "Grader: exact_match, regex, llm_pairwise, llm_pairwise_swap, or llm_rubric."
+        ),
     ),
     grader_provider: str | None = typer.Option(None, help="Provider used by LLM graders."),
     max_tokens: int | None = typer.Option(None, help="Maximum generated tokens per call."),
@@ -228,9 +230,16 @@ def evaluate(
 
     async def _run() -> None:
         try:
-            if grader not in {"exact_match", "regex", "llm_pairwise", "llm_rubric"}:
+            if grader not in {
+                "exact_match",
+                "regex",
+                "llm_pairwise",
+                "llm_pairwise_swap",
+                "llm_rubric",
+            }:
                 raise typer.BadParameter(
-                    "grader must be exact_match, regex, llm_pairwise, or llm_rubric"
+                    "grader must be exact_match, regex, llm_pairwise, "
+                    "llm_pairwise_swap, or llm_rubric"
                 )
             if compare_strategies_option:
                 report_model = await compare_strategies(
@@ -480,6 +489,10 @@ def _print_lab_report(card) -> None:
 
 def _print_recommendation(recommendation) -> None:
     console.print("[bold]Recommendations[/bold]")
+    console.print(
+        f"configured_{recommendation.configured_objective}: "
+        f"{recommendation.recommended_strategy}"
+    )
     by_objective = recommendation.by_objective or {
         "best_accuracy": recommendation.best_accuracy,
         "best_latency": recommendation.best_latency,

@@ -10,6 +10,10 @@ providers:
     model: llama3.2:3b
     timeout_seconds: 300
     weight: 1.0
+    # Set both prices for cost-complete traces. Zero is appropriate for API billing
+    # of a locally hosted model; hardware/energy cost is outside this estimate.
+    input_cost_per_million_tokens_usd: 0
+    output_cost_per_million_tokens_usd: 0
     headers: {}
 
   - name: local-lmstudio
@@ -20,6 +24,8 @@ providers:
     model: local-model
     timeout_seconds: 300
     weight: 1.0
+    input_cost_per_million_tokens_usd: 0
+    output_cost_per_million_tokens_usd: 0
     headers: {}
 
   - name: cloud-openai

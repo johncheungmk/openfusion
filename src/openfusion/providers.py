@@ -97,11 +97,21 @@ class OpenAICompatibleProvider(ModelProvider):
                 raise ValueError("Provider response did not contain choices")
             message = choices[0].get("message") or {}
             content = self._render_content(message.get("content"))
-            usage_raw = data.get("usage") or {}
+            provider_reported_model = data.get("model")
+            usage_value = data.get("usage")
+            usage_raw = usage_value if isinstance(usage_value, dict) else {}
+            prompt_tokens = self._nonnegative_int(usage_raw.get("prompt_tokens"))
+            completion_tokens = self._nonnegative_int(usage_raw.get("completion_tokens"))
+            total_tokens = self._nonnegative_int(usage_raw.get("total_tokens"))
+            usage_available = prompt_tokens is not None and completion_tokens is not None
             usage = Usage(
-                prompt_tokens=int(usage_raw.get("prompt_tokens", 0) or 0),
-                completion_tokens=int(usage_raw.get("completion_tokens", 0) or 0),
-                total_tokens=int(usage_raw.get("total_tokens", 0) or 0),
+                prompt_tokens=prompt_tokens or 0,
+                completion_tokens=completion_tokens or 0,
+                total_tokens=(
+                    total_tokens
+                    if total_tokens is not None
+                    else (prompt_tokens or 0) + (completion_tokens or 0)
+                ),
             )
             return CandidateResult(
                 provider=self.config.name,
@@ -111,7 +121,15 @@ class OpenAICompatibleProvider(ModelProvider):
                 ok=True,
                 latency_ms=int((time.perf_counter() - started) * 1000),
                 usage=usage,
-                metadata={"finish_reason": choices[0].get("finish_reason")},
+                metadata={
+                    "finish_reason": choices[0].get("finish_reason"),
+                    "usage_available": usage_available,
+                    "provider_reported_model": (
+                        provider_reported_model
+                        if isinstance(provider_reported_model, str)
+                        else None
+                    ),
+                },
             )
         except httpx.TimeoutException:
             return self._error_result(
@@ -139,7 +157,18 @@ class OpenAICompatibleProvider(ModelProvider):
             ok=False,
             error=error,
             latency_ms=int((time.perf_counter() - started) * 1000),
+            metadata={"usage_available": False},
         )
+
+    @staticmethod
+    def _nonnegative_int(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value if value >= 0 else None
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value.strip())
+        return None
 
     @staticmethod
     def _render_content(content: Any) -> str:

@@ -23,6 +23,7 @@ Fields:
 - `reference`: string or list of accepted strings;
 - `system`: optional system message;
 - `answer_regex`: optional extraction regex; group 1 is used when present;
+- `rubric`: optional task-specific instruction for LLM graders;
 - `metadata`: optional object preserved by the loader.
 
 ## Run
@@ -73,7 +74,7 @@ before matching. Optional LLM graders are available:
 openfusion evaluate examples/eval_moa_sample.jsonl \
   --config openfusion.yaml \
   --compare-strategies fallback,parallel_synthesis \
-  --grader llm_pairwise \
+  --grader llm_pairwise_swap \
   --grader-provider local-ollama
 
 openfusion evaluate examples/eval_moa_sample.jsonl \
@@ -82,6 +83,14 @@ openfusion evaluate examples/eval_moa_sample.jsonl \
   --grader llm_rubric \
   --grader-provider local-ollama
 ```
+
+`llm_pairwise_swap` judges A/B and B/A orderings when two calls remain in the per-case
+budget and the first verdict is valid. It accepts a preference only when both valid
+verdicts agree after answer-identity remapping. Insufficient budget or malformed verdicts
+are `abstain`; changed preferences are `inconsistent`. Grader calls, tokens, latency,
+estimated cost, normalized verdicts, order consistency, provider/model, and self-judge
+risk are reported separately from generation work. Single-pass `llm_pairwise` remains
+available for exploratory runs.
 
 LLM judge scores are not ground truth. They are model outputs and can be biased,
 inconsistent, or contaminated by prompt wording. Use them for triage, then verify
@@ -92,14 +101,23 @@ or blinded human review.
 
 Reports include:
 
-- `total_examples`, `accuracy`, and per-case results;
-- win, tie, and loss rates versus the fallback baseline in compare mode;
+- `total_examples`, `accuracy`, Wilson 95% accuracy bounds, and per-case results;
+- conditional win, tie, and loss rates for LLM pairwise graders in compare mode;
 - total and average model calls per example;
-- total, average, p50, and p95 latency in milliseconds;
+- total, average, p50, p95, and p99 end-to-end latency in milliseconds;
 - prompt, completion, and total token counts;
-- `estimated_cost` when cost configuration is added by deployments;
-- `accuracy_per_call` and `accuracy_per_1k_tokens`;
-- `strategy_failures`.
+- complete estimated cost when every executed call reports usage and both per-provider
+  token prices are configured;
+- correct answers per call and per 1,000 tokens;
+- grader calls, tokens, latency, estimated cost, abstentions, inconsistencies, position
+  consistency, and self-judge counts;
+- `strategy_failures` and failed provider-call totals.
+
+Set `input_cost_per_million_tokens_usd` and
+`output_cost_per_million_tokens_usd` on every used provider for cost-complete totals. A
+missing price makes the aggregate cost `null` rather than silently reporting a partial
+total. The configured `fusion.max_total_calls` is a hard ceiling; a request or CLI option
+may select a lower budget but cannot raise it.
 
 Compare at least:
 
@@ -141,7 +159,9 @@ often answer confidently enough without escalation.
 3. Mixed-model fusion: use `semantic_vote` for short exact-answer tasks, `parallel_synthesis` for open-ended tasks, and `pairwise_rank_fuse` for candidate ranking plus synthesis.
 4. Cascade: use `uncertainty_cascade` for cost- or latency-sensitive use.
 5. Equal-budget comparison: compare N calls of the best single model against N calls of mixed fusion.
-6. Metrics: report accuracy or win rate, latency p50/p95, total calls, tokens, accuracy per call, accuracy per 1k tokens, delta versus fallback, and delta versus the best single model.
+6. Metrics: report accuracy or win rate with uncertainty, latency p50/p95/p99, total
+   calls, tokens, cost coverage, correct answers per call/per 1k tokens, delta versus
+   fallback, and delta versus the best single model.
 7. Report negative results: if fusion does not help, say so.
 
 OpenRouter Fusion compared solo models, self-fusion, mixed panels, and budget panels. OpenFusion users should reproduce that structure with their own models and tasks, not claim the same scores.

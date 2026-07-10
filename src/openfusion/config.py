@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import math
 import os
 from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import yaml
 from dotenv import load_dotenv
@@ -21,12 +23,35 @@ class ProviderConfig(BaseModel):
     model: str
     timeout_seconds: float = 90
     weight: float = 1.0
+    input_cost_per_million_tokens_usd: float | None = None
+    output_cost_per_million_tokens_usd: float | None = None
     headers: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("must not be empty")
+        if "/" in stripped:
+            raise ValueError("must not contain '/' because provider names are used in model IDs")
+        return stripped
 
     @field_validator("base_url")
     @classmethod
     def trim_slash(cls, value: str) -> str:
-        return value.rstrip("/")
+        value = value.rstrip("/")
+        try:
+            parsed = urlsplit(value)
+        except ValueError as exc:
+            raise ValueError("must be a valid URL") from exc
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError(
+                "must not contain credentials; use api_key_env or configured headers"
+            )
+        if parsed.query or parsed.fragment:
+            raise ValueError("must not contain a query string or fragment")
+        return value
 
     @field_validator("timeout_seconds", "weight")
     @classmethod
@@ -35,10 +60,36 @@ class ProviderConfig(BaseModel):
             raise ValueError("must be greater than zero")
         return value
 
+    @field_validator(
+        "input_cost_per_million_tokens_usd",
+        "output_cost_per_million_tokens_usd",
+    )
+    @classmethod
+    def require_nonnegative_cost(cls, value: float | None) -> float | None:
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError("must be a finite number that is zero or greater")
+        return value
+
     def resolved_api_key(self) -> str | None:
         if self.api_key_env:
             return os.getenv(self.api_key_env)
         return None
+
+    def estimate_cost_usd(
+        self,
+        *,
+        prompt_tokens: int,
+        completion_tokens: int,
+    ) -> float | None:
+        if (
+            self.input_cost_per_million_tokens_usd is None
+            or self.output_cost_per_million_tokens_usd is None
+        ):
+            return None
+        return (
+            max(0, prompt_tokens) * self.input_cost_per_million_tokens_usd
+            + max(0, completion_tokens) * self.output_cost_per_million_tokens_usd
+        ) / 1_000_000
 
 
 class PanelRoleConfig(BaseModel):
@@ -173,16 +224,31 @@ class AppConfig(BaseModel):
         if duplicate_names:
             raise ValueError(f"Duplicate provider names: {', '.join(duplicate_names)}")
 
-        known_names = set(provider_names)
-        missing_panel = [name for name in self.fusion.panel if name not in known_names]
-        if missing_panel:
-            raise ValueError(f"Fusion panel references unknown providers: {', '.join(missing_panel)}")
-        missing_cascade = [
-            name for name in self.fusion.cascade_providers if name not in known_names
-        ]
-        if missing_cascade:
+        enabled_names = {provider.name for provider in self.providers if provider.enabled}
+        all_names = set(provider_names)
+        unknown_panel = [name for name in self.fusion.panel if name not in all_names]
+        if unknown_panel:
             raise ValueError(
-                f"Cascade providers reference unknown providers: {', '.join(missing_cascade)}"
+                f"Fusion panel references unknown providers: {', '.join(unknown_panel)}"
+            )
+        disabled_panel = [name for name in self.fusion.panel if name not in enabled_names]
+        if disabled_panel:
+            raise ValueError(
+                f"Fusion panel references disabled providers: {', '.join(disabled_panel)}"
+            )
+        unknown_cascade = [
+            name for name in self.fusion.cascade_providers if name not in all_names
+        ]
+        if unknown_cascade:
+            raise ValueError(
+                f"Cascade providers reference unknown providers: {', '.join(unknown_cascade)}"
+            )
+        disabled_cascade = [
+            name for name in self.fusion.cascade_providers if name not in enabled_names
+        ]
+        if disabled_cascade:
+            raise ValueError(
+                f"Cascade providers reference disabled providers: {', '.join(disabled_cascade)}"
             )
 
         role_references = {
@@ -196,8 +262,10 @@ class AppConfig(BaseModel):
             "Vote equivalence": self.fusion.vote_equivalence_provider,
         }
         for role, provider_name in role_references.items():
-            if provider_name and provider_name not in known_names:
+            if provider_name and provider_name not in all_names:
                 raise ValueError(f"{role} provider is unknown: {provider_name}")
+            if provider_name and provider_name not in enabled_names:
+                raise ValueError(f"{role} provider is disabled: {provider_name}")
 
         return self
 
@@ -240,6 +308,8 @@ def write_example_config(path: str | Path) -> None:
                 "model": "llama3.2:3b",
                 "timeout_seconds": 300,
                 "weight": 1.0,
+                "input_cost_per_million_tokens_usd": 0,
+                "output_cost_per_million_tokens_usd": 0,
             }
         ],
         "fusion": {

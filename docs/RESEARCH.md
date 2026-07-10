@@ -1,110 +1,217 @@
 # Research positioning
 
-OpenFusion is an engineering implementation inspired by several inference-time
-scaling directions. The links below are references, not claims that OpenFusion
-reproduces every reported result.
+Research review cutoff: **2026-07-10**.
 
-OpenFusion is a transparent, self-hostable, local-model-friendly runtime for
-OpenRouter-Fusion-like and MoA-inspired experiments. It is not the original
-Together AI MoA implementation, not a trained Sakana Fugu-style orchestrator, not
-a replacement for LiteLLM, and not a claim that more agents always improve results.
+OpenFusion is an open-source, OpenAI-compatible runtime for explicit, bounded
+multi-model inference workflows. It supports local and hosted OpenAI-compatible providers
+and records public operational traces. It is not weight-level model merging, a learned
+orchestration foundation model, or evidence that multi-agent inference always improves an
+answer.
 
-## Comparison
+The project turns research ideas into inspectable engineering baselines:
 
-| System | Open-source implementation | Self-hostable | Local model support | OpenAI-compatible gateway | Learned orchestrator | Configurable workflow strategies | Transparent traces | Built-in evaluation | Provider/key management focus | Intended role |
-|---|---|---|---|---|---|---|---|---|---|---|
-| OpenFusion | Yes | Yes | Yes | Yes | No | Yes | Yes | Yes | Basic | Transparent orchestration runtime for local/cloud fusion experiments |
-| OpenRouter Fusion | No, managed feature | No | No direct local hosting | Via OpenRouter API | No public learned orchestrator claim | Limited by managed service | Structured analysis surfaced by service | No local built-in evaluator | Managed provider marketplace | Hosted multi-model deliberation product |
-| Sakana Fugu | No public implementation | No | No direct local hosting | Product/model endpoint | Yes, positioned as learned orchestration | Not user-configurable as local workflows | Not a local trace runtime | No local built-in evaluator | Not gateway focused | Learned model orchestration system |
-| LiteLLM | Yes | Yes | Yes, through configured providers | Yes | No | Routing/gateway policies, not MoA workflows | Gateway logs/observability | No MoA evaluation harness | Strong | Provider gateway, key management, budgets, routing, observability |
+- same-model sampling and selection;
+- exact, weighted, and semantic voting;
+- pairwise ranking followed by generative fusion;
+- parallel synthesis and layered refinement;
+- critique and revision;
+- confidence- and consistency-aware cascading;
+- heuristic or constrained-plan adaptation;
+- local equal-budget evaluation.
 
-## Parallel synthesis
+Reported results from a paper or hosted product belong to that system's models, prompts,
+data, judge, and budget. OpenFusion does not inherit those results by implementing a
+similar workflow shape.
 
-OpenRouter Fusion runs a panel in parallel, compares consensus and contradictions, and uses structured analysis to write a stronger final response:
+## Evidence policy
 
-- https://openrouter.ai/docs/guides/features/plugins/fusion
-- https://openrouter.ai/blog/announcements/fusion-beats-frontier/
+This documentation distinguishes among:
 
-OpenFusion's `parallel_synthesis` is the closest built-in analogue, without OpenRouter's proprietary panel selection or integrated web tools. OpenFusion v0.4 can optionally ask the synthesizer for public structured sections covering consensus, contradictions, unique insights, missing information, and the final answer.
+- **peer-reviewed papers**, identified by venue and year;
+- **accepted 2026 papers**, whose final proceedings may still be recent;
+- **preprints**, identified with their first-posted date;
+- **product documentation and vendor experiments**, which describe a product rather than
+  independent academic evidence;
+- **planned OpenFusion work**, which is not described as current behavior.
 
-## Self-consistency and voting
+The strongest recurring lesson is conditionality: routing, fusion, judging, and extra
+test-time compute work only when their estimator, candidate pool, task, and budget make
+them useful.
 
-Self-consistency samples multiple reasoning paths and chooses a consistent answer:
+## Research map
 
-- https://openreview.net/forum?id=1PL1NIMMrw
+| Direction | Primary source | Status and date | OpenFusion relationship | Main caveat |
+|---|---|---|---|---|
+| Self-consistency | [Wang et al.](https://openreview.net/forum?id=1PL1NIMMrw) | ICLR 2023 | `best_of_n`, voting, same-model sampling | Established on selected reasoning tasks |
+| Rank then fuse | [LLM-Blender](https://aclanthology.org/2023.acl-long.792/) | ACL 2023 | `pairwise_rank_fuse`, synthesis | OpenFusion uses prompted, not trained, ranking |
+| Small/large routing | [Hybrid LLM](https://proceedings.iclr.cc/paper_files/paper/2024/hash/b47d93c99fa22ac0b377578af0a1f63a-Abstract-Conference.html) | ICLR 2024 | Cascade and adaptive-routing motivation | Two-model results do not imply arbitrary-pool performance |
+| Routing benchmark | [RouterBench](https://arxiv.org/abs/2403.12031) | Preprint, 2024-03-18 | Offline router evaluation reference | Historical models, costs, and outcomes |
+| Layered agents | [Mixture-of-Agents](https://proceedings.iclr.cc/paper_files/paper/2025/hash/5434be94e82c54327bb9dcaf7fca52b6-Abstract-Conference.html) | ICLR 2025 Spotlight | `layered_refinement` | Strong claims include LLM-judged conversational tasks |
+| Learned preference router | [RouteLLM](https://proceedings.iclr.cc/paper_files/paper/2025/hash/5503a7c69d48a2f86fc00b3dc09de686-Abstract-Conference.html) | ICLR 2025 | Future optional learned router | Requires representative preference supervision and drift checks |
+| Same-model MoA | [Self-MoA](https://arxiv.org/abs/2502.00674) | Preprint, 2025-02-02 | `self_moa`, `self_moa_seq` | Main-conference peer review not established |
+| Unified route/cascade | [Dekoninck et al.](https://icml.cc/virtual/2025/poster/46183) | ICML 2025 | Future quality-aware dynamic cascade | Quality estimation is the difficult component |
+| Adaptive test-time compute | [Snell et al.](https://proceedings.iclr.cc/paper_files/paper/2025/hash/1b623663fd9b874366f3ce019fdfdd44-Abstract-Conference.html) | ICLR 2025 oral | Adaptive call/sample budgets | Results focus on mathematics and verifier access |
+| Large routing re-evaluation | [LLMRouterBench](https://arxiv.org/abs/2601.07206) | Preprint, 2026-01-12 | Simple-baseline and pool-curation guidance | Recent, not peer reviewed |
+| Model plus length routing | [R2-Router](https://openreview.net/forum?id=S3m1tSp8F4) | Accepted ICML 2026, posted 2026-04-30 | Future output-budget action | Length instructions need backend enforcement |
+| Unified model/compute action | [UniScale](https://arxiv.org/abs/2605.30898) | Accepted ICML 2026, posted 2026-05-29 | Future `(model, strategy, budget)` router | Online feedback and exploration are required |
+| Shared reasoning budget | [CLEAR](https://arxiv.org/abs/2606.03092) | Accepted ICML 2026, posted 2026-06-02 | Multi-dimensional budget motivation | Global traffic objective differs from one request |
+| System-level agent evaluation | [MASEval](https://aclanthology.org/2026.acl-demo.34/) | ACL 2026 System Demonstration | Evaluate orchestration, harness, and error handling as one system | Framework effects do not transfer automatically to OpenFusion |
 
-OpenFusion implements textual `majority_vote` and `weighted_vote`. These are transparent baselines and work best for concise or regex-extractable outputs. OpenFusion v0.4 also adds `self_moa`, which samples one provider multiple times and then selects the best sample or synthesizes a new final answer.
+See [Related work](research/related-work.md) for findings, dates, and limitations in
+greater detail.
 
-## Ranking and generative fusion
+## What current research implies for OpenFusion
 
-LLM-Blender separates candidate ranking from generative fusion:
+### Measure candidate quality and complementarity
 
-- https://aclanthology.org/2023.acl-long.792/
+Self-MoA results warn that adding a lower-quality provider for nominal diversity can hurt.
+Router re-evaluations likewise find diminishing returns from larger pools. Panel selection
+should therefore use direct-provider outcomes and complementary error patterns rather than
+provider count alone.
 
-OpenFusion exposes both ideas as `best_of_n` and `parallel_synthesis`.
+OpenFusion should continue to compare:
 
-## Mixture of Agents
+- every provider directly;
+- best single provider;
+- same-model sampling;
+- mixed-model fusion;
+- a simple fallback/router baseline;
+- equal-budget alternatives.
 
-Mixture-of-Agents presents previous-layer outputs to later agents for iterative improvement:
+### Treat routing as estimation under drift
 
-- https://arxiv.org/abs/2406.04692
+The route/cascade literature consistently depends on estimating response quality for a
+specific query. Prices, latency, model aliases, and query distributions change. A future
+learned router should be optional, versioned, trained only from explicit evaluation data,
+and fall back to a readable policy when its calibration data is missing or stale.
 
-OpenFusion's `layered_refinement` implements a configurable, bounded version of this pattern.
+### Allocate compute adaptively
 
-OpenFusion's `self_moa_seq` is a sequential, single-provider variant for larger sample counts or long candidates. It batches candidates and carries forward a running selected or fused answer instead of presenting every candidate to one final prompt.
+Uniform best-of-N is simple but can overspend on easy or hopeless examples. Recent work
+supports choosing model, sample count, strategy, and token budget together. Any OpenFusion
+implementation must preserve the hard `max_total_calls` invariant and check every budget
+before each call.
 
-Role-diverse panel prompts are a practical engineering control for assigning complementary public perspectives to otherwise similar panel calls. They should be evaluated empirically; a role prompt is not a guarantee that a model will perform that function well.
+### Audit the evaluator
 
-Research also warns that mixing lower-quality models can reduce performance, so provider diversity should be evaluated rather than assumed beneficial:
+LLM judges are useful scalable measurements, not oracles. Primary research documents
+position, verbosity, self-preference, multilingual, and adversarial biases:
 
-- https://arxiv.org/abs/2502.00674
+- [Judging LLM-as-a-Judge](https://proceedings.neurips.cc/paper_files/paper/2023/hash/91f18a1287b398d378ef22505bf41832-Abstract-Datasets_and_Benchmarks.html), NeurIPS 2023;
+- [LLM Evaluators Recognize and Favor Their Own Generations](https://proceedings.neurips.cc/paper_files/paper/2024/hash/7f1f0218e45f5414c79c0679633e47bc-Abstract-Conference.html), NeurIPS 2024;
+- [Systematic Position-Bias Study](https://aclanthology.org/2025.ijcnlp-long.18/), IJCNLP-AACL 2025;
+- [Multilingual Judge Reliability](https://aclanthology.org/2025.findings-emnlp.587/), Findings of EMNLP 2025;
+- [BiasScope](https://openreview.net/forum?id=QGOw6AU8Lp), ICLR 2026.
 
-## Debate, critique, and revision
+Objective graders should take precedence. LLM comparisons should balance answer order,
+record judge identity, expose abstention, and be checked against a human-reviewed sample.
 
-Multi-agent debate and round-table approaches explore iterative criticism and consensus:
+### Do not equate verbal confidence with probability
 
-- https://arxiv.org/abs/2305.19118
-- https://arxiv.org/abs/2309.13007
+[Can LLMs Express Their Uncertainty?](https://proceedings.iclr.cc/paper_files/paper/2024/hash/6733cf15e10e2cd1d59af033c3bb8507-Abstract-Conference.html)
+(ICLR 2024) found frequent overconfidence and task dependence in black-box confidence
+elicitation. `uncertainty_cascade` is therefore an experimental selective-prediction
+strategy. It should be evaluated using calibration and risk-coverage metrics, not only
+final accuracy.
 
-OpenFusion implements a controlled `critique_revision` workflow rather than unrestricted conversational debate.
+## v0.6 evaluation-reliability implementation
 
-## Sakana orchestration
+### Order-balanced, abstaining judges
 
-Sakana Fugu and the Conductor research dynamically choose models and workflow structures:
+The optional `llm_pairwise_swap` grader requests A/B and B/A orders when two calls remain
+in the per-case budget and the first verdict is valid, then remaps them to stable answer
+identities. It accepts a win, tie, or loss only when both judgments agree after remapping.
+Contradictory judgments become `inconsistent`; insufficient budget or malformed/missing
+judgments become `abstain` instead of silently becoming ties.
 
-- https://sakana.ai/fugu/
-- https://sakana.ai/learning-to-orchestrate/
-- https://arxiv.org/abs/2606.21228
+Records include normalized verdicts, judge provider/model, order consistency,
+self-judge risk, resource use, and an abstention reason. The lower-cost single-pass
+`llm_pairwise` mode remains available but now also abstains on malformed output.
 
-OpenFusion's `adaptive` strategy is intentionally more modest. It uses readable heuristics or a constrained JSON planner. It is not a reinforcement-learned orchestration foundation model.
+### Wilson confidence intervals
 
-Sakana's AB-MCTS research explores multi-model tree search:
+Evaluation and Lab accuracy include a two-sided 95% Wilson interval. Lab complementarity
+also includes Wilson intervals for oracle accuracy and all-provider co-failure. Paired
+strategy comparisons still require a paired test; marginal intervals alone do not answer
+the paired question.
 
-- https://sakana.ai/ab-mcts/
+### Cost accounting
 
-Search trees, external verification, and tool execution remain future OpenFusion work.
+Provider configuration accepts separate input/output USD prices per million tokens.
+Calls, workflows, graders, evaluations, and Lab runs expose estimated cost. An aggregate
+is `null` unless every executed call in its scope is priced. Cached, reasoning, image, and
+other separately billed classes remain future work. No static cloud price table is treated
+as permanently current.
 
-## Weight-level model merging
+### Panel complementarity report
 
-Sakana's evolutionary model merging combines model parameters or layers offline. That is a different problem from OpenFusion's API-level inference workflows:
+Lab result-card schema v2 derives from direct-provider outcomes:
 
-- https://sakana.ai/evolutionary-model-merge/
+- best-observed-single and selection-oracle accuracy;
+- all-provider co-failure rate;
+- pairwise correctness disagreement;
+- marginal oracle contribution from each provider;
+- confidence intervals for binomial quantities.
 
-## Evaluation principle
+Selection-oracle accuracy is a ceiling only for policies that select one direct member
+answer. It is a diagnostic reference, not a ceiling, for generative synthesis.
 
-Multi-agent methods spend additional inference compute and do not improve every task. Compare accuracy, latency, token use, and financial cost at equal or explicitly reported budgets. OpenFusion includes a small exact-match harness to encourage reproducible local comparisons, but serious benchmarks require domain-specific graders.
+The full protocol is specified in
+[Evaluation methodology](concepts/evaluation-methodology.md) and
+[Benchmarking OpenFusion](research/benchmarks.md).
 
-Do not claim benchmark gains without evaluation on representative data. Recommended
-baselines for papers and benchmark reports:
+## System comparison
 
-- single best model;
-- direct provider route or `fallback`;
-- `best_of_n`;
-- `self_moa`;
-- mixed MoA / `layered_refinement`;
-- `pairwise_rank_fuse`;
-- `semantic_vote` for short-answer tasks;
-- `uncertainty_cascade` for cost-sensitive tasks.
+| System | Public implementation | Self-hostable/local models | Learned orchestrator | Workflow transparency | Primary role |
+|---|---|---|---|---|---|
+| OpenFusion | Yes | Yes | No | Public bounded plan and operational trace | Local/cloud fusion research runtime |
+| [OpenRouter Fusion](https://openrouter.ai/docs/guides/features/plugins/fusion) | Managed service | No direct local hosting | No public learned-router claim | Managed structured analysis | Hosted multi-model deliberation product |
+| [Sakana Fugu](https://sakana.ai/fugu-release/) | No public implementation | No | Yes, product/research positioning | Not a local trace runtime | Learned orchestration system |
+| [LiteLLM](https://github.com/BerriAI/litellm) | Yes | Through configured backends | No | Gateway observability | Provider gateway, routing, keys, and budgets |
 
-Report equal-budget comparisons where possible, including `max_total_calls`, total
-tokens, latency, failures, and the grader used.
+OpenFusion can sit above a gateway such as LiteLLM. That arrangement separates workflow
+semantics from provider access, key management, and load balancing.
+
+## Observability direction
+
+The official
+[OpenTelemetry GenAI semantic-conventions repository](https://github.com/open-telemetry/semantic-conventions-genai)
+now defines inference, workflow, agent, tool, evaluation, and MCP signals. As of the
+research cutoff, the split repository's version metadata tracks core semantic conventions
+v1.43.0. The GenAI conventions remain under active development without a formal
+split-repository release or settled schema URL.
+
+A future optional exporter should use a workflow root span and provider-call child spans,
+pin its schema version, and emit operational metadata such as model, stage, tokens,
+latency, remaining budget, and error type. Prompt, response, system-instruction, tool, and
+candidate content can contain PII or secrets and must remain off by default. OpenFusion
+will not emit hidden chain-of-thought.
+
+## Research questions suitable for OpenFusion Lab
+
+1. When does same-model sampling beat a mixed-provider panel at equal tokens?
+2. Does a ranker identify the oracle-available answer often enough to justify its call?
+3. Which providers add marginal oracle coverage rather than correlated errors?
+4. At what calibrated risk level should an uncertainty cascade escalate?
+5. Does a dynamic route/cascade policy beat a fixed provider order after accounting for
+   estimator calls?
+6. How quickly does a router become stale after a model alias or price change?
+7. Do conclusions survive an independent judge family and order-balanced grading?
+
+Negative results are welcome. They help identify tasks where the simplest direct model is
+the correct deployment choice.
+
+## Claim boundary
+
+Do not claim an OpenFusion benchmark gain unless the result includes:
+
+- a representative, versioned dataset;
+- best-single and direct-provider baselines;
+- an equal or explicitly reported budget;
+- calls, tokens, cost assumptions, latency, and failures;
+- the grader and judge protocol;
+- uncertainty intervals and paired evidence where appropriate;
+- exact provider/model identifiers and evaluation date.
+
+Every conclusion must remain scoped to that experiment. More models and more calls can
+improve, match, or degrade quality.

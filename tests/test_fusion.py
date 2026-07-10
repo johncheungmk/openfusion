@@ -197,6 +197,9 @@ async def test_fallback_all_providers_fail() -> None:
     )
 
     assert result.final == "No provider produced a usable answer."
+    assert result.ok is False
+    assert result.error == "No provider produced a usable answer."
+    assert result.failed_model_calls == 2
     assert [candidate.ok for candidate in result.candidates] == [False, False]
 
 

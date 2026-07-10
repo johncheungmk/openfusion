@@ -89,3 +89,16 @@ nav:
       - Ollama: troubleshooting/ollama.md
       - JSONL BOM Errors: troubleshooting/jsonl-bom.md
       - Slow CPU Models: troubleshooting/slow-cpu-models.md
+  - Reference:
+      - Architecture: ARCHITECTURE.md
+      - Evaluation Guide: EVALUATION.md
+      - OpenFusion Lab: LAB.md
+      - Mixture-of-Agents Guide: MOA.md
+      - Research Positioning: RESEARCH.md
+      - Security: SECURITY.md
+      - LiteLLM Integration: LITELLM.md
+      - Cookbook: COOKBOOK.md
+  - Archive (v0.2, historical):
+      - v0.1 to v0.2 Migration: MIGRATION_V2.md
+      - v0.2 Release Instructions: RELEASE_V2.md
+      - v0.2 Codex Upgrade Brief: CODEX_V2_UPGRADE.md

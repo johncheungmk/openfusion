@@ -5,12 +5,16 @@
 - Never commit `.env`, API keys, bearer tokens, private endpoints, or cloud credentials.
 - Reference provider credentials through `api_key_env`.
 - OpenFusion rejects unknown fields in provider configuration, including an inline `api_key` field.
+- Provider and Lab base URLs reject embedded user credentials, query strings, and
+  fragments. Shareable Lab cards omit base URLs entirely.
 - Provider HTTP error snippets are bounded and known API keys are redacted.
 
 ## Network exposure
 
 - The default server bind address is `127.0.0.1`.
-- Set a strong `OPENFUSION_API_KEY` before binding to `0.0.0.0`.
+- Configure `server.api_key_env: OPENFUSION_API_KEY` and set a strong
+  `OPENFUSION_API_KEY` value before binding to `0.0.0.0`. Setting the environment
+  variable alone does not enable authentication.
 - Use a reverse proxy, TLS, firewall rules, rate limits, and upstream budget controls for shared deployments.
 - Provider `base_url` values are trusted administrator configuration. Do not allow untrusted users to edit them; doing so could create SSRF access to internal services.
 
@@ -25,7 +29,10 @@ include_candidate_outputs: false
 include_workflow_outputs: false
 ```
 
-when intermediate text should not be returned to clients. These settings do not prevent the configured providers from receiving the prompt.
+when intermediate text should not be returned to clients. Together they suppress
+candidate bodies, workflow outputs, judge analysis, and plan rationale; the final answer
+and operational trace remain public. These settings do not prevent the configured
+providers from receiving the prompt.
 
 ## Planner safety
 
@@ -48,7 +55,8 @@ OpenFusion prompts request concise user-visible conclusions and explicitly prohi
 
 ## Denial of service and cost
 
-- Set `fusion.max_total_calls`.
+- Set `fusion.max_total_calls`; it is a hard administrator ceiling that request overrides
+  may lower but cannot raise. OpenFusion bounds candidate scheduling before task creation.
 - Set provider timeouts and upstream token/rate budgets.
 - Keep `max_parallel` appropriate for local hardware.
 - Large local CPU models may occupy a machine for minutes per multi-stage request.

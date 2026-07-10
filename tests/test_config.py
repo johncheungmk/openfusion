@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from openfusion.config import load_config
+from openfusion.config import AppConfig, FusionConfig, ProviderConfig, load_config
 
 
 def test_load_config(tmp_path: Path) -> None:
@@ -74,6 +74,57 @@ fusion:
 
     with pytest.raises(ValidationError):
         load_config(path)
+
+
+def test_disabled_provider_reference_is_rejected() -> None:
+    disabled = ProviderConfig(
+        name="disabled",
+        enabled=False,
+        base_url="http://disabled",
+        model="model",
+    )
+
+    with pytest.raises(ValidationError, match="disabled providers: disabled"):
+        AppConfig(
+            providers=[disabled],
+            fusion=FusionConfig(panel=["disabled"]),
+        )
+
+
+def test_provider_names_and_pricing_are_validated() -> None:
+    with pytest.raises(ValidationError, match="must not contain"):
+        ProviderConfig(name="bad/name", base_url="http://local", model="model")
+    with pytest.raises(ValidationError, match="zero or greater"):
+        ProviderConfig(
+            name="local",
+            base_url="http://local",
+            model="model",
+            input_cost_per_million_tokens_usd=-1,
+        )
+
+    priced = ProviderConfig(
+        name="local",
+        base_url="http://local",
+        model="model",
+        input_cost_per_million_tokens_usd=1,
+        output_cost_per_million_tokens_usd=2,
+    )
+    assert priced.estimate_cost_usd(prompt_tokens=2, completion_tokens=3) == 0.000008
+
+
+def test_provider_base_url_rejects_embedded_credentials() -> None:
+    with pytest.raises(ValidationError, match="must not contain credentials"):
+        ProviderConfig(
+            name="local",
+            base_url="https://alice:supersecret@example.test/v1",
+            model="model",
+        )
+    with pytest.raises(ValidationError, match="query string or fragment"):
+        ProviderConfig(
+            name="local",
+            base_url="https://example.test/v1?api_key=supersecret",
+            model="model",
+        )
 
 
 def test_load_config_reads_dotenv_next_to_config(tmp_path: Path) -> None:

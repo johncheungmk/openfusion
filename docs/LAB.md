@@ -38,16 +38,31 @@ openfusion lab recommend results.json
 openfusion lab export results.json --out result-card.json
 ```
 
-Result cards use `schema_version: openfusion-lab-result-v1` and omit secrets, provider headers, raw prompts, and raw references by default. They include `baselines`, `best_single_model_baseline`, `fallback_baseline`, `strategy_comparisons`, and objective-specific recommendations. Future result cards may support public leaderboard workflows.
+New result cards use `schema_version: openfusion-lab-result-v2`; v1 cards still load with
+backward-compatible defaults. Cards omit engine URLs, API-key environment-variable names,
+provider headers, raw prompts, and raw references by default. They include direct
+baselines, best-observed-single and (when configured) fallback baselines,
+strategy comparisons, Wilson accuracy intervals, end-to-end p50/p95/p99 latency,
+cost-completeness metrics, objective-specific recommendations, and a panel-complementarity
+report. The complementarity report exposes best-observed-single/selection-oracle accuracy, all-model
+co-failure, pairwise correctness disagreement, and marginal oracle contribution. Oracle
+accuracy is diagnostic and is not a deployable selector score.
+
+The configured recommendation objective and latency cap are preserved in v2 cards. The
+latency cap filters the primary recommendation; it does not hide the unfiltered leaders
+reported for accuracy, latency, efficiency, and the documented balanced heuristic.
 
 ## Recommended Testing Methodology
 
-1. Single-model baselines: run model A alone, model B alone, and identify the best single model.
+1. Single-model baselines: run every model directly. Lab reports the best observed on this
+   split; select a deployable best single model on separate validation data.
 2. Same-model test-time compute: run `self_moa` with the best model, and use `self_moa_seq` if many samples are used.
 3. Mixed-model fusion: use `semantic_vote` for short exact-answer tasks, `parallel_synthesis` for open-ended tasks, and `pairwise_rank_fuse` for candidate ranking plus synthesis.
 4. Cascade: use `uncertainty_cascade` for cost- or latency-sensitive runs.
 5. Equal-budget comparison: compare N calls of the best single model against N calls of mixed fusion.
-6. Metrics: report accuracy or win rate, latency p50/p95, total calls, tokens, accuracy per call, accuracy per 1k tokens, delta versus fallback, and delta versus the best single model.
+6. Metrics: report accuracy or win rate with uncertainty, latency p50/p95/p99, total
+   calls, tokens, configured cost coverage, correct answers per call/per 1k tokens, delta
+   versus fallback, and delta versus the best single model.
 7. Report negative results: if fusion does not help, say so.
 
 OpenRouter Fusion compared solo models, self-fusion, mixed panels, and budget panels. OpenFusion users should reproduce the structure for their local model set and dataset, not claim the same scores.
@@ -84,4 +99,5 @@ Use:
 openfusion lab engine-plan examples/lab_llama_gptoss.yaml
 ```
 
-The command prints manual launch guidance for Ollama, vLLM, and TGI. OpenFusion Lab v0.5.0 does not auto-launch engines.
+The command prints manual launch guidance for Ollama, vLLM, and TGI. OpenFusion Lab does
+not auto-launch engines.

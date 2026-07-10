@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from openfusion import fusion as fusion_module
 from openfusion.config import AppConfig, FusionConfig, PanelRoleConfig, ProviderConfig
 from openfusion.fusion import FusionEngine
 from openfusion.providers import ModelProvider, StaticProvider
@@ -32,6 +33,25 @@ class QueueProvider(ModelProvider):
 
 def provider_config(name: str, weight: float = 1.0) -> ProviderConfig:
     return ProviderConfig(name=name, base_url=f"http://{name}", model=f"model-{name}", weight=weight)
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        fusion_module.PARALLEL_SYNTHESIS_SYSTEM_PROMPT,
+        fusion_module.STRUCTURED_SYNTHESIS_SYSTEM_PROMPT,
+        fusion_module.SELECTOR_SYSTEM_PROMPT,
+        fusion_module.CRITIC_SYSTEM_PROMPT,
+        fusion_module.REVISION_SYSTEM_PROMPT,
+        fusion_module.REFINEMENT_SYSTEM_PROMPT,
+        fusion_module.RANKER_SYSTEM_PROMPT,
+        fusion_module.PAIRWISE_RANKER_SYSTEM_PROMPT,
+        fusion_module.SEMANTIC_EQUIVALENCE_SYSTEM_PROMPT,
+    ],
+)
+def test_candidate_consuming_prompts_mark_content_untrusted(prompt: str) -> None:
+    assert "untrusted data" in prompt
+    assert "instructions" in prompt
 
 
 @pytest.mark.asyncio
@@ -226,6 +246,9 @@ async def test_structured_workflow_outputs_can_be_suppressed() -> None:
 
     assert result.final == "Public final."
     assert result.workflow_outputs == {}
+    assert result.judge_analysis is None
+    assert result.plan is not None
+    assert result.plan.rationale == "Rationale suppressed by configuration."
 
 
 @pytest.mark.asyncio
@@ -928,6 +951,46 @@ async def test_call_budget_is_enforced_and_visible() -> None:
 
 
 @pytest.mark.asyncio
+async def test_request_cannot_raise_configured_call_ceiling_or_schedule_unbounded_work() -> None:
+    provider = QueueProvider(provider_config("a"), ["A", "B", "unused"])
+    config = AppConfig(
+        providers=[provider_config("a")],
+        fusion=FusionConfig(panel=["a"], max_total_calls=2),
+    )
+
+    result = await FusionEngine(config, providers={"a": provider}).run(
+        [ChatMessage(role="user", content="Test")],
+        strategy="best_of_n",
+        samples_per_provider=1_000_000_000,
+        max_total_calls=1_000_000_000,
+    )
+
+    assert result.plan is not None
+    assert result.plan.max_total_calls == 2
+    assert len(provider.requests) == 2
+    assert sum(step.model_call for step in result.trace) == 2
+
+
+@pytest.mark.asyncio
+async def test_tight_candidate_budget_schedules_providers_round_robin() -> None:
+    provider_a = QueueProvider(provider_config("a"), ["A"])
+    provider_b = QueueProvider(provider_config("b"), ["B"])
+    config = AppConfig(
+        providers=[provider_config("a"), provider_config("b")],
+        fusion=FusionConfig(panel=["a", "b"], max_total_calls=2),
+    )
+
+    await FusionEngine(config, providers={"a": provider_a, "b": provider_b}).run(
+        [ChatMessage(role="user", content="Test")],
+        strategy="majority_vote",
+        samples_per_provider=2,
+    )
+
+    assert len(provider_a.requests) == 1
+    assert len(provider_b.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_workflow_outputs_can_be_suppressed() -> None:
     providers = {
         "a": StaticProvider(provider_config("a"), "Draft"),
@@ -951,3 +1014,6 @@ async def test_workflow_outputs_can_be_suppressed() -> None:
 
     assert result.final == "Final"
     assert result.workflow_outputs == {}
+    assert result.judge_analysis is None
+    assert result.plan is not None
+    assert result.plan.rationale == "Rationale suppressed by configuration."

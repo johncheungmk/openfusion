@@ -5,7 +5,8 @@ import json
 import httpx
 import pytest
 
-from openfusion.config import ProviderConfig
+from openfusion.config import AppConfig, FusionConfig, ProviderConfig
+from openfusion.fusion import FusionEngine
 from openfusion.providers import OpenAICompatibleProvider
 from openfusion.schema import ChatMessage, ProviderRequest
 
@@ -147,3 +148,133 @@ async def test_extra_body_cannot_override_fixed_provider_request_fields() -> Non
     assert captured["temperature"] == 0.3
     assert captured["stream"] is False
     assert captured["top_p"] == 0.8
+
+
+@pytest.mark.asyncio
+async def test_missing_upstream_usage_keeps_estimated_cost_incomplete() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider_config = ProviderConfig(
+        name="provider",
+        base_url="https://example.test/v1",
+        model="model",
+        input_cost_per_million_tokens_usd=1,
+        output_cost_per_million_tokens_usd=2,
+    )
+    provider = OpenAICompatibleProvider(provider_config, client=client)
+    engine = FusionEngine(
+        AppConfig(
+            providers=[provider_config],
+            fusion=FusionConfig(panel=["provider"]),
+        ),
+        providers={"provider": provider},
+    )
+    try:
+        result = await engine.run_provider(
+            "provider",
+            [ChatMessage(role="user", content="hello")],
+        )
+    finally:
+        await client.aclose()
+
+    assert result.final == "ok"
+    assert result.candidates[0].metadata["usage_available"] is False
+    assert result.estimated_cost_usd is None
+
+
+@pytest.mark.asyncio
+async def test_provider_reported_model_is_preserved_in_trace() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+        return httpx.Response(
+            200,
+            json={
+                "model": "resolved-model-2026-07-10",
+                "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider_config = ProviderConfig(
+        name="provider",
+        base_url="https://example.test/v1",
+        model="stable-alias",
+    )
+    provider = OpenAICompatibleProvider(provider_config, client=client)
+    engine = FusionEngine(
+        AppConfig(
+            providers=[provider_config],
+            fusion=FusionConfig(panel=["provider"]),
+        ),
+        providers={"provider": provider},
+    )
+    try:
+        result = await engine.run_provider(
+            "provider",
+            [ChatMessage(role="user", content="hello")],
+        )
+    finally:
+        await client.aclose()
+
+    assert result.candidates[0].model == "stable-alias"
+    assert (
+        result.candidates[0].metadata["provider_reported_model"]
+        == "resolved-model-2026-07-10"
+    )
+    assert result.trace[0].provider_reported_model == "resolved-model-2026-07-10"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "usage",
+    [
+        {"prompt_tokens": None, "completion_tokens": 0, "total_tokens": 0},
+        {"prompt_tokens": -1, "completion_tokens": 1, "total_tokens": 0},
+    ],
+)
+async def test_invalid_usage_does_not_produce_complete_cost(
+    usage: dict[str, int | None],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+                "usage": usage,
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider_config = ProviderConfig(
+        name="provider",
+        base_url="https://example.test/v1",
+        model="model",
+        input_cost_per_million_tokens_usd=1,
+        output_cost_per_million_tokens_usd=2,
+    )
+    provider = OpenAICompatibleProvider(provider_config, client=client)
+    engine = FusionEngine(
+        AppConfig(
+            providers=[provider_config],
+            fusion=FusionConfig(panel=["provider"]),
+        ),
+        providers={"provider": provider},
+    )
+    try:
+        result = await engine.run_provider(
+            "provider",
+            [ChatMessage(role="user", content="hello")],
+        )
+    finally:
+        await client.aclose()
+
+    assert result.candidates[0].metadata["usage_available"] is False
+    assert result.candidates[0].usage.prompt_tokens >= 0
+    assert result.candidates[0].usage.completion_tokens >= 0
+    assert result.candidates[0].usage.total_tokens >= 0
+    assert result.estimated_cost_usd is None

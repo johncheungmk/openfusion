@@ -3,14 +3,17 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import platform
 import random
 import statistics
 import sys
 import time
 from datetime import datetime, timezone
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
@@ -20,11 +23,12 @@ from . import __version__
 from .config import AppConfig, FusionConfig, ProviderConfig
 from .evaluation import is_exact_match
 from .fusion import FusionEngine, canonical_strategy
+from .metrics import wilson_interval
 from .providers import ModelProvider
 from .schema import ChatMessage, FusionResult
 
 
-LAB_RESULT_SCHEMA_VERSION = "openfusion-lab-result-v1"
+LAB_RESULT_SCHEMA_VERSION = "openfusion-lab-result-v2"
 
 
 class LabExperiment(BaseModel):
@@ -74,7 +78,16 @@ class LabEngine(BaseModel):
     @field_validator("base_url")
     @classmethod
     def trim_slash(cls, value: str) -> str:
-        return value.rstrip("/")
+        value = value.rstrip("/")
+        try:
+            parsed = urlsplit(value)
+        except ValueError as exc:
+            raise ValueError("must be a valid URL") from exc
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("must not contain credentials; use api_key_env instead")
+        if parsed.query or parsed.fragment:
+            raise ValueError("must not contain a query string or fragment")
+        return value
 
 
 class LabModel(BaseModel):
@@ -86,6 +99,8 @@ class LabModel(BaseModel):
     weight: float = 1.0
     timeout_seconds: float = 300
     api_key_env: str | None = None
+    input_cost_per_million_tokens_usd: float | None = None
+    output_cost_per_million_tokens_usd: float | None = None
 
     @field_validator("provider_name", "engine", "model")
     @classmethod
@@ -102,9 +117,19 @@ class LabModel(BaseModel):
             raise ValueError("must be greater than zero")
         return value
 
+    @field_validator(
+        "input_cost_per_million_tokens_usd",
+        "output_cost_per_million_tokens_usd",
+    )
+    @classmethod
+    def require_nonnegative_cost(cls, value: float | None) -> float | None:
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError("must be a finite number that is zero or greater")
+        return value
+
 
 class LabStrategy(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     self_moa_provider: str | None = None
@@ -162,18 +187,26 @@ class LabMetricSummary(BaseModel):
     total_examples: int = 0
     correct: int = 0
     accuracy: float = 0.0
+    accuracy_ci95_low: float = 0.0
+    accuracy_ci95_high: float = 0.0
     total_calls: int = 0
     avg_calls_per_example: float = 0.0
     total_latency_ms: int = 0
     avg_latency_ms: float = 0.0
     p50_latency_ms: float = 0.0
     p95_latency_ms: float = 0.0
+    p99_latency_ms: float = 0.0
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0
     total_tokens: int = 0
     accuracy_per_call: float = 0.0
     accuracy_per_1k_tokens: float = 0.0
+    priced_examples: int = 0
+    total_estimated_cost_usd: float | None = None
+    avg_estimated_cost_usd: float | None = None
+    cost_per_correct_usd: float | None = None
     failures: int = 0
+    total_failed_model_calls: int = 0
     win_rate_vs_baseline: float | None = None
     tie_rate_vs_baseline: float | None = None
     loss_rate_vs_baseline: float | None = None
@@ -198,6 +231,34 @@ class BaselineResultSummary(BaseModel):
     metrics: LabMetricSummary
     balanced_score: float | None = None
     notes: list[str] = Field(default_factory=list)
+
+
+class PairwiseCorrectnessReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider_a: str
+    provider_b: str
+    total_examples: int = 0
+    correctness_disagreement_rate: float = 0.0
+    both_wrong_rate: float = 0.0
+
+
+class PanelComplementarityReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    providers: list[str] = Field(default_factory=list)
+    total_examples: int = 0
+    oracle_accuracy: float = 0.0
+    oracle_accuracy_ci95_low: float = 0.0
+    oracle_accuracy_ci95_high: float = 0.0
+    best_single_provider: str | None = None
+    best_single_accuracy: float = 0.0
+    oracle_gain_pp: float = 0.0
+    all_model_cofailure_rate: float = 0.0
+    all_model_cofailure_rate_ci95_low: float = 0.0
+    all_model_cofailure_rate_ci95_high: float = 0.0
+    pairwise: list[PairwiseCorrectnessReport] = Field(default_factory=list)
+    marginal_oracle_contribution: dict[str, float] = Field(default_factory=dict)
 
 
 class StrategyComparison(BaseModel):
@@ -226,6 +287,10 @@ class LabRecommendation(BaseModel):
     best_latency: str | None = None
     best_efficiency: str | None = None
     best_balanced: str | None = None
+    configured_objective: Literal["accuracy", "latency", "efficiency", "balanced"] = (
+        "balanced"
+    )
+    recommended_strategy: str | None = None
     by_objective: dict[str, str | None] = Field(default_factory=dict)
     explanations_by_objective: dict[str, list[str]] = Field(default_factory=dict)
     explanations: list[str] = Field(default_factory=list)
@@ -245,6 +310,7 @@ class LabResultCard(BaseModel):
     engines: list[dict[str, Any]]
     models: list[dict[str, Any]]
     baselines: list[BaselineResultSummary] = Field(default_factory=list)
+    panel_complementarity: PanelComplementarityReport | None = None
     first_provider_baseline: BaselineResultSummary | None = None
     fallback_baseline: StrategyResultSummary | None = None
     best_single_model_baseline: BaselineResultSummary | None = None
@@ -255,6 +321,7 @@ class LabResultCard(BaseModel):
     strategy_comparisons: list[StrategyComparison] = Field(default_factory=list)
     strategies: list[StrategyResultSummary]
     recommendations: LabRecommendation
+    recommendation_settings: LabRecommendationSettings | None = None
     warnings: list[str] = Field(default_factory=list)
     config_hash: str | None = None
     dataset_hash: str | None = None
@@ -335,10 +402,12 @@ class LabExampleResult(BaseModel):
     output: str = ""
     error: str | None = None
     calls: int = 0
+    failed_model_calls: int = 0
     latency_ms: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    estimated_cost_usd: float | None = None
 
 
 def load_lab_config(path: str | Path = "lab.yaml") -> LabConfig:
@@ -366,6 +435,12 @@ def lab_config_to_app_config(config: LabConfig) -> AppConfig:
                 model=model.model,
                 timeout_seconds=model.timeout_seconds,
                 weight=model.weight,
+                input_cost_per_million_tokens_usd=(
+                    model.input_cost_per_million_tokens_usd
+                ),
+                output_cost_per_million_tokens_usd=(
+                    model.output_cost_per_million_tokens_usd
+                ),
                 headers={},
             )
         )
@@ -475,9 +550,10 @@ async def run_lab_experiment(
     finally:
         await engine.aclose()
 
-    baseline_strategy = "fallback" if "fallback" in by_strategy else next(iter(by_strategy), None)
+    baseline_strategy = "fallback" if "fallback" in by_strategy else None
     strategy_summaries = _summarize_strategies(by_strategy, baseline_strategy)
     baseline_summaries = _summarize_baselines(by_baseline, config.models)
+    panel_complementarity = _panel_complementarity_report(by_baseline)
     first_provider_baseline = baseline_summaries[0] if baseline_summaries else None
     fallback_baseline = next(
         (summary for summary in strategy_summaries if summary.strategy == baseline_strategy),
@@ -527,6 +603,7 @@ async def run_lab_experiment(
         engines=[_safe_engine_metadata(engine) for engine in config.engines],
         models=[_safe_model_metadata(model) for model in config.models],
         baselines=baseline_summaries,
+        panel_complementarity=panel_complementarity,
         first_provider_baseline=first_provider_baseline,
         fallback_baseline=fallback_baseline,
         best_single_model_baseline=best_single_by_accuracy,
@@ -537,6 +614,7 @@ async def run_lab_experiment(
         strategy_comparisons=strategy_comparisons,
         strategies=strategy_summaries,
         recommendations=recommendations,
+        recommendation_settings=config.recommendation,
         warnings=warnings,
         config_hash=_sha256_text(lab_config_to_yaml(config)),
         dataset_hash=_sha256_file(dataset_path),
@@ -567,14 +645,18 @@ def load_result_card(path: str | Path) -> LabResultCard:
 
 def export_result_card(path: str | Path, out: str | Path) -> None:
     card = load_result_card(path)
-    Path(out).write_text(card.model_dump_json(indent=2), encoding="utf-8")
+    preserve_v1_shape = card.schema_version == "openfusion-lab-result-v1"
+    Path(out).write_text(
+        card.model_dump_json(indent=2, exclude_unset=preserve_v1_shape),
+        encoding="utf-8",
+    )
 
 
 def recommend_from_card(card: LabResultCard) -> LabRecommendation:
     return recommend_from_summaries(
         card.strategies,
         baseline_strategy=_baseline_strategy(card.strategies),
-        settings=LabRecommendationSettings(),
+        settings=card.recommendation_settings or LabRecommendationSettings(),
         baselines=card.baselines,
         fallback_baseline=card.fallback_baseline,
         best_single_model=card.best_single_model_baseline,
@@ -592,6 +674,7 @@ def recommend_from_summaries(
 ) -> LabRecommendation:
     if not summaries:
         return LabRecommendation(
+            configured_objective=settings.objective,
             by_objective={
                 "best_accuracy": None,
                 "best_latency": None,
@@ -646,7 +729,57 @@ def recommend_from_summaries(
             item.metrics.accuracy,
         ),
     )
-    best_balanced = max(scored, key=lambda item: item.balanced_score or float("-inf"))
+    best_balanced = max(scored, key=_balanced_score_key)
+
+    quality_eligible = [
+        summary
+        for summary in scored
+        if summary.metrics.total_examples > 0
+        and summary.metrics.correct > 0
+        and summary.metrics.failures < summary.metrics.total_examples
+    ]
+    eligible = quality_eligible
+    if settings.max_latency_ms is not None:
+        eligible = [
+            summary
+            for summary in quality_eligible
+            if summary.metrics.avg_latency_ms <= settings.max_latency_ms
+        ]
+    eligible_by_objective: dict[str, StrategyResultSummary] = {}
+    if eligible:
+        eligible_by_objective = {
+            "accuracy": max(
+                eligible,
+                key=lambda item: (
+                    item.metrics.accuracy,
+                    -item.metrics.failures,
+                    -item.metrics.avg_latency_ms,
+                    -item.metrics.avg_calls_per_example,
+                ),
+            ),
+            "latency": min(
+                eligible,
+                key=lambda item: (
+                    item.metrics.avg_latency_ms
+                    if item.metrics.total_examples
+                    else float("inf"),
+                    -item.metrics.accuracy,
+                ),
+            ),
+            "efficiency": max(
+                eligible,
+                key=lambda item: (
+                    item.metrics.accuracy_per_call,
+                    item.metrics.accuracy_per_1k_tokens,
+                    item.metrics.accuracy,
+                ),
+            ),
+            "balanced": max(
+                eligible,
+                key=_balanced_score_key,
+            ),
+        }
+    recommended = eligible_by_objective.get(settings.objective)
 
     by_objective = {
         "best_accuracy": best_accuracy.strategy,
@@ -710,12 +843,24 @@ def recommend_from_summaries(
         warnings.append(
             f"{best_accuracy.strategy} exceeded max_latency_ms={settings.max_latency_ms}."
         )
+    if not quality_eligible:
+        warnings.append(
+            "No strategy produced both a correct result and a non-total-failure run; no "
+            "configured-objective recommendation was made."
+        )
+    elif settings.max_latency_ms is not None and not eligible:
+        warnings.append(
+            f"No strategy met max_latency_ms={settings.max_latency_ms}; no "
+            "configured-objective recommendation was made."
+        )
 
     return LabRecommendation(
         best_accuracy=best_accuracy.strategy,
         best_latency=best_latency.strategy,
         best_efficiency=best_efficiency.strategy,
         best_balanced=best_balanced.strategy,
+        configured_objective=settings.objective,
+        recommended_strategy=recommended.strategy if recommended else None,
         by_objective=by_objective,
         explanations_by_objective=explanations_by_objective,
         explanations=list(dict.fromkeys(explanations)),
@@ -871,11 +1016,14 @@ async def _run_provider_baseline(
                     id=example.id,
                     correct=correct,
                     output=fusion_result.final,
+                    error=fusion_result.error if not fusion_result.ok else None,
                     calls=_call_count(fusion_result),
+                    failed_model_calls=fusion_result.failed_model_calls,
                     latency_ms=_latency_ms(fusion_result, started),
                     prompt_tokens=fusion_result.usage.prompt_tokens,
                     completion_tokens=fusion_result.usage.completion_tokens,
                     total_tokens=fusion_result.usage.total_tokens,
+                    estimated_cost_usd=fusion_result.estimated_cost_usd,
                 )
             )
         except Exception as exc:  # noqa: BLE001 - one failed example should not stop the lab
@@ -917,11 +1065,14 @@ async def _run_strategy(
                     id=example.id,
                     correct=correct,
                     output=fusion_result.final,
+                    error=fusion_result.error if not fusion_result.ok else None,
                     calls=_call_count(fusion_result),
+                    failed_model_calls=fusion_result.failed_model_calls,
                     latency_ms=_latency_ms(fusion_result, started),
                     prompt_tokens=fusion_result.usage.prompt_tokens,
                     completion_tokens=fusion_result.usage.completion_tokens,
                     total_tokens=fusion_result.usage.total_tokens,
+                    estimated_cost_usd=fusion_result.estimated_cost_usd,
                 )
             )
         except Exception as exc:  # noqa: BLE001 - one failed example should not stop the lab
@@ -941,6 +1092,8 @@ def _grade_lab_output(
     result: FusionResult,
     example: LabExample,
 ) -> bool:
+    if not result.ok:
+        return False
     if answer_mode == "exact":
         return is_exact_match(result.final, example.references)
     if answer_mode == "regex":
@@ -987,6 +1140,107 @@ def _summarize_baselines(
     return summaries
 
 
+def _panel_complementarity_report(
+    by_baseline: dict[str, list[LabExampleResult]],
+) -> PanelComplementarityReport | None:
+    if not by_baseline:
+        return None
+
+    providers = [name.removeprefix("baseline/") for name in by_baseline]
+    first_results = next(iter(by_baseline.values()))
+    example_ids = [result.id for result in first_results]
+    outcomes: dict[str, list[bool]] = {}
+    for baseline_name, results in by_baseline.items():
+        provider = baseline_name.removeprefix("baseline/")
+        by_id = {result.id: result.correct for result in results}
+        outcomes[provider] = [by_id.get(example_id, False) for example_id in example_ids]
+
+    total = len(example_ids)
+    provider_correct = {
+        provider: sum(provider_outcomes)
+        for provider, provider_outcomes in outcomes.items()
+    }
+    if total:
+        best_single_provider = max(providers, key=lambda provider: provider_correct[provider])
+        best_single_accuracy = provider_correct[best_single_provider] / total
+    else:
+        best_single_provider = None
+        best_single_accuracy = 0.0
+
+    oracle_correct = sum(
+        any(outcomes[provider][index] for provider in providers)
+        for index in range(total)
+    )
+    oracle_accuracy = oracle_correct / total if total else 0.0
+    oracle_ci95_low, oracle_ci95_high = wilson_interval(oracle_correct, total)
+    cofailure_count = total - oracle_correct
+    cofailure_rate = cofailure_count / total if total else 0.0
+    cofailure_ci95_low, cofailure_ci95_high = wilson_interval(cofailure_count, total)
+
+    pairwise: list[PairwiseCorrectnessReport] = []
+    for provider_a, provider_b in combinations(providers, 2):
+        disagreement_count = sum(
+            outcome_a != outcome_b
+            for outcome_a, outcome_b in zip(
+                outcomes[provider_a],
+                outcomes[provider_b],
+                strict=True,
+            )
+        )
+        both_wrong_count = sum(
+            not outcome_a and not outcome_b
+            for outcome_a, outcome_b in zip(
+                outcomes[provider_a],
+                outcomes[provider_b],
+                strict=True,
+            )
+        )
+        pairwise.append(
+            PairwiseCorrectnessReport(
+                provider_a=provider_a,
+                provider_b=provider_b,
+                total_examples=total,
+                correctness_disagreement_rate=(
+                    disagreement_count / total if total else 0.0
+                ),
+                both_wrong_rate=both_wrong_count / total if total else 0.0,
+            )
+        )
+
+    marginal_contribution: dict[str, float] = {}
+    for excluded_provider in providers:
+        remaining_providers = [
+            provider for provider in providers if provider != excluded_provider
+        ]
+        oracle_without_provider_correct = sum(
+            any(outcomes[provider][index] for provider in remaining_providers)
+            for index in range(total)
+        )
+        oracle_without_provider_accuracy = (
+            oracle_without_provider_correct / total if total else 0.0
+        )
+        marginal_contribution[excluded_provider] = max(
+            0.0,
+            oracle_accuracy - oracle_without_provider_accuracy,
+        )
+
+    return PanelComplementarityReport(
+        providers=providers,
+        total_examples=total,
+        oracle_accuracy=oracle_accuracy,
+        oracle_accuracy_ci95_low=oracle_ci95_low,
+        oracle_accuracy_ci95_high=oracle_ci95_high,
+        best_single_provider=best_single_provider,
+        best_single_accuracy=best_single_accuracy,
+        oracle_gain_pp=(oracle_accuracy - best_single_accuracy) * 100,
+        all_model_cofailure_rate=cofailure_rate,
+        all_model_cofailure_rate_ci95_low=cofailure_ci95_low,
+        all_model_cofailure_rate_ci95_high=cofailure_ci95_high,
+        pairwise=pairwise,
+        marginal_oracle_contribution=marginal_contribution,
+    )
+
+
 def _metrics(
     results: list[LabExampleResult],
     baseline_by_id: dict[str, LabExampleResult] | None,
@@ -994,9 +1248,18 @@ def _metrics(
     total = len(results)
     correct = sum(result.correct for result in results)
     accuracy = correct / total if total else 0.0
+    accuracy_ci95_low, accuracy_ci95_high = wilson_interval(correct, total)
     total_calls = sum(result.calls for result in results)
     total_latency = sum(result.latency_ms for result in results)
     total_tokens = sum(result.total_tokens for result in results)
+    priced_costs = [
+        result.estimated_cost_usd
+        for result in results
+        if result.estimated_cost_usd is not None
+    ]
+    priced_examples = len(priced_costs)
+    all_examples_priced = total > 0 and priced_examples == total
+    total_estimated_cost = sum(priced_costs) if all_examples_priced else None
     wins = ties = losses = 0
     if baseline_by_id is not None:
         for result in results:
@@ -1013,18 +1276,32 @@ def _metrics(
         total_examples=total,
         correct=correct,
         accuracy=accuracy,
+        accuracy_ci95_low=accuracy_ci95_low,
+        accuracy_ci95_high=accuracy_ci95_high,
         total_calls=total_calls,
         avg_calls_per_example=total_calls / total if total else 0.0,
         total_latency_ms=total_latency,
         avg_latency_ms=total_latency / total if total else 0.0,
         p50_latency_ms=_percentile([result.latency_ms for result in results], 50),
         p95_latency_ms=_percentile([result.latency_ms for result in results], 95),
+        p99_latency_ms=_percentile([result.latency_ms for result in results], 99),
         total_prompt_tokens=sum(result.prompt_tokens for result in results),
         total_completion_tokens=sum(result.completion_tokens for result in results),
         total_tokens=total_tokens,
-        accuracy_per_call=accuracy / total_calls if total_calls else 0.0,
-        accuracy_per_1k_tokens=accuracy / (total_tokens / 1000) if total_tokens else 0.0,
+        accuracy_per_call=correct / total_calls if total_calls else 0.0,
+        accuracy_per_1k_tokens=correct / (total_tokens / 1000) if total_tokens else 0.0,
+        priced_examples=priced_examples,
+        total_estimated_cost_usd=total_estimated_cost,
+        avg_estimated_cost_usd=(
+            total_estimated_cost / total if total_estimated_cost is not None else None
+        ),
+        cost_per_correct_usd=(
+            total_estimated_cost / correct
+            if total_estimated_cost is not None and correct
+            else None
+        ),
         failures=sum(1 for result in results if result.error),
+        total_failed_model_calls=sum(result.failed_model_calls for result in results),
         win_rate_vs_baseline=(wins / total) if total and baseline_by_id is not None else None,
         tie_rate_vs_baseline=(ties / total) if total and baseline_by_id is not None else None,
         loss_rate_vs_baseline=(losses / total) if total and baseline_by_id is not None else None,
@@ -1043,6 +1320,12 @@ def _balanced_score(
     call_penalty = max(0.0, call_ratio - 1.0) * (0.03 if settings.prefer_lower_calls else 0.01)
     failure_penalty = (metrics.failures / metrics.total_examples) if metrics.total_examples else 0.0
     return metrics.accuracy - latency_penalty - call_penalty - failure_penalty
+
+
+def _balanced_score_key(
+    summary: StrategyResultSummary | BaselineResultSummary,
+) -> float:
+    return summary.balanced_score if summary.balanced_score is not None else float("-inf")
 
 
 def _best_single_model_by_accuracy(
@@ -1108,7 +1391,7 @@ def _best_single_model_by_balanced_score(
     ]
     for index, summary in enumerate(scored):
         baselines[index].balanced_score = summary.balanced_score
-    return max(scored, key=lambda item: item.balanced_score or float("-inf"))
+    return max(scored, key=_balanced_score_key)
 
 
 def _strategy_comparisons(
@@ -1326,6 +1609,9 @@ def _percentile(values: list[int], percentile: int) -> float:
 
 
 def _call_count(result: FusionResult) -> int:
+    explicitly_marked_calls = sum(step.model_call for step in result.trace)
+    if explicitly_marked_calls:
+        return explicitly_marked_calls
     return sum(
         1
         for step in result.trace
@@ -1333,10 +1619,7 @@ def _call_count(result: FusionResult) -> int:
     )
 
 
-def _latency_ms(result: FusionResult, started: float) -> int:
-    trace_latency = sum(step.latency_ms or 0 for step in result.trace)
-    if trace_latency:
-        return trace_latency
+def _latency_ms(_result: FusionResult, started: float) -> int:
     return int((time.perf_counter() - started) * 1000)
 
 
@@ -1351,7 +1634,6 @@ def _safe_engine_metadata(engine: LabEngine) -> dict[str, Any]:
     return {
         "name": engine.name,
         "type": engine.type,
-        "base_url": engine.base_url,
         "launch": engine.launch,
     }
 
@@ -1363,6 +1645,8 @@ def _safe_model_metadata(model: LabModel) -> dict[str, Any]:
         "model": model.model,
         "weight": model.weight,
         "timeout_seconds": model.timeout_seconds,
+        "input_cost_per_million_tokens_usd": model.input_cost_per_million_tokens_usd,
+        "output_cost_per_million_tokens_usd": model.output_cost_per_million_tokens_usd,
     }
 
 
@@ -1377,8 +1661,10 @@ def _sample_results(by_strategy: dict[str, list[LabExampleResult]]) -> list[dict
                     "correct": result.correct,
                     "error": result.error,
                     "calls": result.calls,
+                    "failed_model_calls": result.failed_model_calls,
                     "latency_ms": result.latency_ms,
                     "total_tokens": result.total_tokens,
+                    "estimated_cost_usd": result.estimated_cost_usd,
                 }
             )
     return rows

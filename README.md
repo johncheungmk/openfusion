@@ -2,11 +2,13 @@
 
 ![OpenFusion — open-source multi-model orchestration and fusion runtime](assets/openfusion-banner.svg)
 
-OpenFusion is an open-source, OpenAI-compatible runtime for multi-model orchestration, model fusion, and local benchmark experiments.
+OpenFusion v0.6.0 is an open-source, OpenAI-compatible runtime for multi-model orchestration, model fusion, and local benchmark experiments.
 
 It supports local and cloud models through OpenAI-compatible APIs, including Ollama, vLLM, LM Studio, LiteLLM, OpenRouter-compatible endpoints, and other `/v1/chat/completions` servers.
 
-OpenFusion helps users test whether fusion actually improves results by comparing strategies against fallback and the best single-model baseline, while reporting accuracy, latency, calls, tokens, and improvement or regression.
+OpenFusion helps users test whether fusion actually improves results by comparing
+strategies against fallback when configured and every direct model, while reporting accuracy uncertainty,
+latency, calls, tokens, optional complete-cost estimates, and improvement or regression.
 
 ## Documentation
 
@@ -29,6 +31,10 @@ The documentation includes:
 
 - OpenAI-compatible `/v1/chat/completions` API server
 - Local and cloud provider support
+- Order-balanced LLM judging with explicit abstention and position-consistency telemetry
+- Wilson confidence intervals, end-to-end latency, and optional token-price cost accounting
+- Lab panel-complementarity reports with oracle and all-model co-failure diagnostics
+- Hard administrator call ceilings with bounded request scheduling
 - Self-MoA and Self-MoA-Seq
 - Semantic voting
 - Parallel synthesis
@@ -90,12 +96,12 @@ openfusion lab recommend results-local-small.json
 OpenFusion Lab will report:
 
 - single-model baselines;
-- best single-model baseline;
+- best-observed single-model baseline on the evaluated split;
 - fusion strategy comparison;
 - accuracy delta versus fallback;
 - accuracy delta versus best single model;
 - latency, call, and token ratios;
-- objective-specific recommendations.
+- objective-specific recommendations with preserved latency/call preferences.
 
 For the full cookbook, see:
 
@@ -169,7 +175,7 @@ The documentation site is built with MkDocs Material and published through GitHu
 Local preview:
 
 ```bash
-python -m pip install mkdocs mkdocs-material
+python -m pip install -e ".[docs]"
 mkdocs serve
 ```
 
@@ -180,3 +186,10 @@ Then open:
 ## License
 
 MIT
+
+## Citation
+
+Research users can cite the current software release using
+[`CITATION.cff`](CITATION.cff). Benchmark claims should also publish the dataset/config
+hashes, exact providers and model identifiers, grader, budget, uncertainty, and negative
+results where applicable.

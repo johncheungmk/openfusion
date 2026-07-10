@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -8,38 +10,62 @@ import pytest
 from typer.testing import CliRunner
 
 from openfusion.cli import app
-from openfusion.config import AppConfig
+from openfusion.config import AppConfig, FusionConfig, ProviderConfig
+from openfusion.fusion import FusionEngine
 from openfusion.lab import (
     LAB_RESULT_SCHEMA_VERSION,
     BaselineResultSummary,
     LabConfig,
+    LabEngine,
+    LabExample,
     LabExampleResult,
+    LabExperiment,
     LabMetricSummary,
+    LabModel,
     LabRecommendationSettings,
+    LabResultCard,
+    LabStrategy,
     StrategyResultSummary,
-    _strategy_comparisons,
+    _grade_lab_output,
+    _latency_ms,
     _metrics,
+    _panel_complementarity_report,
+    _strategy_comparisons,
     build_engine_plan,
+    export_result_card,
     lab_config_to_app_config,
     lab_config_to_yaml,
     load_lab_dataset,
+    load_result_card,
+    recommend_from_card,
     recommend_from_summaries,
     run_lab_experiment,
     search_huggingface_models,
 )
+from openfusion.metrics import wilson_interval
 from openfusion.providers import ModelProvider
-from openfusion.schema import CandidateResult, ProviderRequest, Usage
+from openfusion.schema import CandidateResult, ChatMessage, FusionResult, ProviderRequest, Usage
 
 
 class LabFakeProvider(ModelProvider):
-    def __init__(self, config, *, answers: dict[str, str], latency_ms: int = 10):
+    def __init__(
+        self,
+        config,
+        *,
+        answers: dict[str, str],
+        latency_ms: int = 10,
+        delay_seconds: float = 0.0,
+    ):
         super().__init__(config)
         self.answers = answers
         self.latency_ms = latency_ms
+        self.delay_seconds = delay_seconds
         self.requests: list[ProviderRequest] = []
 
     async def chat(self, request: ProviderRequest) -> CandidateResult:
         self.requests.append(request)
+        if self.delay_seconds:
+            await asyncio.sleep(self.delay_seconds)
         prompt = "\n".join(str(message.content or "") for message in request.messages)
         content = "wrong"
         for marker, answer in self.answers.items():
@@ -92,6 +118,92 @@ def test_generated_provider_config_and_fusion_defaults(tmp_path: Path) -> None:
     assert "providers:" in lab_config_to_yaml(config)
 
 
+def test_lab_model_pricing_validation_and_provider_propagation(tmp_path: Path) -> None:
+    config = LabConfig.load(_write_lab_yaml(tmp_path))
+    priced_model = config.models[0].model_copy(
+        update={
+            "input_cost_per_million_tokens_usd": 0.5,
+            "output_cost_per_million_tokens_usd": 1.5,
+        }
+    )
+    config = config.model_copy(update={"models": [priced_model, *config.models[1:]]})
+
+    provider = lab_config_to_app_config(config).providers[0]
+
+    assert provider.input_cost_per_million_tokens_usd == pytest.approx(0.5)
+    assert provider.output_cost_per_million_tokens_usd == pytest.approx(1.5)
+    with pytest.raises(ValueError, match="zero or greater"):
+        LabModel(
+            provider_name="invalid",
+            engine="ollama-one",
+            model="model",
+            input_cost_per_million_tokens_usd=-0.01,
+        )
+
+
+def test_lab_engine_rejects_credentials_in_base_url() -> None:
+    with pytest.raises(ValueError, match="must not contain credentials"):
+        LabEngine(
+            name="unsafe",
+            base_url="https://alice:supersecret@example.test/v1",
+        )
+    with pytest.raises(ValueError, match="query string or fragment"):
+        LabEngine(
+            name="unsafe",
+            base_url="https://example.test/v1?api_key=supersecret",
+        )
+
+
+def test_lab_strategy_rejects_unknown_options() -> None:
+    with pytest.raises(ValueError, match="self_moa_sampels"):
+        LabStrategy(name="self_moa", self_moa_sampels=3)
+
+
+def test_v1_result_card_loads_with_v2_field_defaults(tmp_path: Path) -> None:
+    result_path = tmp_path / "v1-results.json"
+    result_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "openfusion-lab-result-v1",
+                "openfusion_version": "0.5.2",
+                "experiment": {"name": "legacy"},
+                "timestamp": "2026-07-01T00:00:00+00:00",
+                "platform": {},
+                "python_version": "3.10",
+                "dataset": {},
+                "engines": [],
+                "models": [],
+                "strategies": [
+                    {
+                        "strategy": "fallback",
+                        "metrics": {
+                            "total_examples": 1,
+                            "correct": 1,
+                            "accuracy": 1.0,
+                        },
+                    }
+                ],
+                "recommendations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    card = load_result_card(result_path)
+
+    assert card.schema_version == "openfusion-lab-result-v1"
+    assert card.panel_complementarity is None
+    assert card.strategies[0].metrics.accuracy_ci95_low == 0.0
+    assert card.strategies[0].metrics.total_estimated_cost_usd is None
+
+    exported_path = tmp_path / "v1-exported.json"
+    export_result_card(result_path, exported_path)
+    exported = json.loads(exported_path.read_text(encoding="utf-8"))
+    assert exported["schema_version"] == "openfusion-lab-result-v1"
+    assert "panel_complementarity" not in exported
+    assert "accuracy_ci95_low" not in exported["strategies"][0]["metrics"]
+
+
 def test_loading_prompt_style_dataset(tmp_path: Path) -> None:
     dataset = tmp_path / "data.jsonl"
     dataset.write_text('{"id":"math","prompt":"2+2?","reference":"4"}\n', encoding="utf-8")
@@ -136,6 +248,7 @@ async def test_lab_run_with_fake_providers_metrics_and_result_card(tmp_path: Pat
             provider,
             answers={"2+2": "4", "FIFO": "B", "3 * 4": "C"},
             latency_ms=10 if provider.name == "local-a" else 20,
+            delay_seconds=0.01 if provider.name == "local-a" else 0.02,
         )
         for provider in app_config.providers
     }
@@ -150,6 +263,11 @@ async def test_lab_run_with_fake_providers_metrics_and_result_card(tmp_path: Pat
     assert baseline_a.provider == "local-a"
     assert baseline_a.model == "llama3.2:3b"
     assert baseline_a.metrics.correct == 3
+    assert baseline_a.metrics.accuracy_ci95_low < baseline_a.metrics.accuracy
+    assert baseline_a.metrics.accuracy_ci95_high == pytest.approx(1.0)
+    assert card.panel_complementarity is not None
+    assert card.panel_complementarity.oracle_accuracy == pytest.approx(1.0)
+    assert card.panel_complementarity.oracle_gain_pp == pytest.approx(0.0)
     assert card.first_provider_baseline == baseline_a
     assert card.fallback_baseline == fallback
     assert card.best_single_model_by_accuracy in card.baselines
@@ -161,11 +279,12 @@ async def test_lab_run_with_fake_providers_metrics_and_result_card(tmp_path: Pat
     assert fallback.metrics.total_prompt_tokens == 6
     assert fallback.metrics.total_completion_tokens == 9
     assert fallback.metrics.total_tokens == 15
-    assert fallback.metrics.avg_latency_ms == 10
-    assert fallback.metrics.p50_latency_ms == 10
-    assert fallback.metrics.p95_latency_ms == 10
-    assert fallback.metrics.accuracy_per_call == pytest.approx(1 / 3)
-    assert fallback.metrics.accuracy_per_1k_tokens == pytest.approx(1000 / 15)
+    assert 5 <= fallback.metrics.avg_latency_ms < 500
+    assert fallback.metrics.p50_latency_ms >= 5
+    assert fallback.metrics.p95_latency_ms < 500
+    assert fallback.metrics.p99_latency_ms < 500
+    assert fallback.metrics.accuracy_per_call == pytest.approx(1.0)
+    assert fallback.metrics.accuracy_per_1k_tokens == pytest.approx(200.0)
     assert majority.metrics.total_calls > fallback.metrics.total_calls
     assert majority.metrics.avg_calls_per_example <= config.experiment.max_total_calls
     assert {comparison.strategy for comparison in card.strategy_comparisons} == {
@@ -183,10 +302,75 @@ async def test_lab_run_with_fake_providers_metrics_and_result_card(tmp_path: Pat
     assert card.recommendations.best_latency == "fallback"
     assert card.recommendations.best_efficiency == "fallback"
     assert card.recommendations.best_balanced == "fallback"
+    assert card.recommendations.configured_objective == "balanced"
+    assert card.recommendations.recommended_strategy == "fallback"
+    assert card.recommendation_settings == config.recommendation
+    assert all("base_url" not in engine for engine in card.engines)
     assert card.recommendations.by_objective["best_accuracy"] in {"fallback", "majority_vote"}
     assert card.recommendations.explanations_by_objective["best_accuracy"]
     assert card.dataset_hash
     assert card.config_hash
+
+
+@pytest.mark.asyncio
+async def test_lab_run_aggregates_configured_estimated_costs(tmp_path: Path) -> None:
+    config = LabConfig.load(_write_lab_yaml(tmp_path))
+    priced_models = [
+        model.model_copy(
+            update={
+                "input_cost_per_million_tokens_usd": 1.0,
+                "output_cost_per_million_tokens_usd": 2.0,
+            }
+        )
+        for model in config.models
+    ]
+    config = config.model_copy(update={"models": priced_models})
+    app_config = lab_config_to_app_config(config)
+    providers = {
+        provider.name: LabFakeProvider(
+            provider,
+            answers={"2+2": "4", "FIFO": "B", "3 * 4": "C"},
+        )
+        for provider in app_config.providers
+    }
+
+    card = await run_lab_experiment(
+        config,
+        lab_path=tmp_path / "lab.yaml",
+        providers=providers,
+    )
+
+    fallback = next(summary for summary in card.strategies if summary.strategy == "fallback")
+    assert fallback.metrics.priced_examples == 3
+    assert fallback.metrics.total_estimated_cost_usd == pytest.approx(3 * 8e-6)
+    assert fallback.metrics.avg_estimated_cost_usd == pytest.approx(8e-6)
+    assert fallback.metrics.cost_per_correct_usd == pytest.approx(8e-6)
+    assert all(baseline.metrics.priced_examples == 3 for baseline in card.baselines)
+
+
+@pytest.mark.asyncio
+async def test_lab_does_not_relabel_first_strategy_as_fallback(tmp_path: Path) -> None:
+    config = LabConfig.load(_write_lab_yaml(tmp_path)).model_copy(
+        update={"strategies": [LabStrategy(name="majority_vote")]}
+    )
+    app_config = lab_config_to_app_config(config)
+    providers = {
+        provider.name: LabFakeProvider(
+            provider,
+            answers={"2+2": "4", "FIFO": "B", "3 * 4": "C"},
+        )
+        for provider in app_config.providers
+    }
+
+    card = await run_lab_experiment(
+        config,
+        lab_path=tmp_path / "lab.yaml",
+        providers=providers,
+    )
+
+    assert card.fallback_baseline is None
+    assert card.strategies[0].baseline_strategy is None
+    assert card.strategy_comparisons[0].accuracy_delta_vs_fallback_pp is None
 
 
 @pytest.mark.asyncio
@@ -204,6 +388,7 @@ async def test_lab_best_single_baseline_selection_by_accuracy_and_latency(tmp_pa
             provider,
             answers=answers,
             latency_ms=5 if provider.name == "local-a" else 25,
+            delay_seconds=0.005 if provider.name == "local-a" else 0.025,
         )
 
     card = await run_lab_experiment(config, lab_path=tmp_path / "lab.yaml", providers=providers)
@@ -215,19 +400,156 @@ async def test_lab_best_single_baseline_selection_by_accuracy_and_latency(tmp_pa
     assert card.best_single_model_by_latency.name == "baseline/local-a"
 
 
-def test_p50_p95_latency_calculation() -> None:
+def test_wilson_p50_p95_p99_and_cost_metrics() -> None:
     metrics = _metrics(
         [
-            LabExampleResult(id="1", correct=True, latency_ms=10),
-            LabExampleResult(id="2", correct=True, latency_ms=20),
-            LabExampleResult(id="3", correct=True, latency_ms=30),
-            LabExampleResult(id="4", correct=True, latency_ms=40),
+            LabExampleResult(
+                id="1", correct=True, latency_ms=10, estimated_cost_usd=0.01
+            ),
+            LabExampleResult(
+                id="2", correct=True, latency_ms=20, estimated_cost_usd=0.02
+            ),
+            LabExampleResult(
+                id="3", correct=True, latency_ms=30, estimated_cost_usd=0.03
+            ),
+            LabExampleResult(
+                id="4", correct=False, latency_ms=40, estimated_cost_usd=0.04
+            ),
         ],
         None,
     )
+    expected_ci = wilson_interval(3, 4)
 
+    assert metrics.accuracy_ci95_low == pytest.approx(expected_ci[0])
+    assert metrics.accuracy_ci95_high == pytest.approx(expected_ci[1])
     assert metrics.p50_latency_ms == 25
     assert metrics.p95_latency_ms == 40
+    assert metrics.p99_latency_ms == 40
+    assert metrics.priced_examples == 4
+    assert metrics.total_estimated_cost_usd == pytest.approx(0.1)
+    assert metrics.avg_estimated_cost_usd == pytest.approx(0.025)
+    assert metrics.cost_per_correct_usd == pytest.approx(0.1 / 3)
+
+    partially_priced = _metrics(
+        [
+            LabExampleResult(id="1", correct=True, estimated_cost_usd=0.01),
+            LabExampleResult(id="2", correct=False),
+        ],
+        None,
+    )
+    assert partially_priced.priced_examples == 1
+    assert partially_priced.total_estimated_cost_usd is None
+    assert partially_priced.avg_estimated_cost_usd is None
+    assert partially_priced.cost_per_correct_usd is None
+
+
+def test_efficiency_metrics_are_dataset_size_invariant() -> None:
+    one_result = [
+        LabExampleResult(id="1", correct=True, calls=1, total_tokens=10),
+    ]
+    repeated_results = [
+        LabExampleResult(id=str(index), correct=True, calls=1, total_tokens=10)
+        for index in range(10)
+    ]
+
+    one = _metrics(one_result, None)
+    repeated = _metrics(repeated_results, None)
+
+    assert one.accuracy_per_call == pytest.approx(1.0)
+    assert repeated.accuracy_per_call == pytest.approx(one.accuracy_per_call)
+    assert one.accuracy_per_1k_tokens == pytest.approx(100.0)
+    assert repeated.accuracy_per_1k_tokens == pytest.approx(one.accuracy_per_1k_tokens)
+
+
+def test_panel_complementarity_report() -> None:
+    by_baseline = {
+        "baseline/a": [
+            LabExampleResult(id="1", correct=True),
+            LabExampleResult(id="2", correct=True),
+            LabExampleResult(id="3", correct=False),
+            LabExampleResult(id="4", correct=False),
+        ],
+        "baseline/b": [
+            LabExampleResult(id="1", correct=True),
+            LabExampleResult(id="2", correct=False),
+            LabExampleResult(id="3", correct=True),
+            LabExampleResult(id="4", correct=False),
+        ],
+        "baseline/c": [
+            LabExampleResult(id="1", correct=False),
+            LabExampleResult(id="2", correct=False),
+            LabExampleResult(id="3", correct=True),
+            LabExampleResult(id="4", correct=False),
+        ],
+    }
+
+    report = _panel_complementarity_report(by_baseline)
+
+    assert report is not None
+    assert report.providers == ["a", "b", "c"]
+    assert report.oracle_accuracy == pytest.approx(0.75)
+    assert (report.oracle_accuracy_ci95_low, report.oracle_accuracy_ci95_high) == pytest.approx(
+        wilson_interval(3, 4)
+    )
+    assert report.best_single_provider == "a"
+    assert report.best_single_accuracy == pytest.approx(0.5)
+    assert report.oracle_gain_pp == pytest.approx(25.0)
+    assert report.all_model_cofailure_rate == pytest.approx(0.25)
+    assert (
+        report.all_model_cofailure_rate_ci95_low,
+        report.all_model_cofailure_rate_ci95_high,
+    ) == pytest.approx(wilson_interval(1, 4))
+    pair_ab = next(
+        pair
+        for pair in report.pairwise
+        if (pair.provider_a, pair.provider_b) == ("a", "b")
+    )
+    assert pair_ab.correctness_disagreement_rate == pytest.approx(0.5)
+    assert pair_ab.both_wrong_rate == pytest.approx(0.25)
+    assert report.marginal_oracle_contribution == pytest.approx(
+        {"a": 0.25, "b": 0.0, "c": 0.0}
+    )
+
+
+@pytest.mark.asyncio
+async def test_parallel_strategy_latency_uses_wall_clock_not_trace_sum() -> None:
+    provider_configs = [
+        ProviderConfig(name=name, base_url=f"http://{name}", model=f"model-{name}")
+        for name in ("a", "b")
+    ]
+    providers = {
+        provider.name: LabFakeProvider(
+            provider,
+            answers={"question": "answer"},
+            latency_ms=1000,
+            delay_seconds=0.02,
+        )
+        for provider in provider_configs
+    }
+    engine = FusionEngine(
+        AppConfig(
+            providers=provider_configs,
+            fusion=FusionConfig(
+                panel=["a", "b"],
+                judge_provider="a",
+                max_parallel=2,
+                max_total_calls=3,
+            ),
+        ),
+        providers=providers,
+    )
+    started = time.perf_counter()
+    result = await engine.run(
+        [ChatMessage(role="user", content="question")],
+        strategy="parallel_synthesis",
+    )
+    wall_latency_ms = _latency_ms(result, started)
+    trace_latency_ms = sum(step.latency_ms or 0 for step in result.trace)
+
+    assert trace_latency_ms == 3000
+    assert 20 <= wall_latency_ms < 1000
+    assert wall_latency_ms < trace_latency_ms
+    await engine.aclose()
 
 
 def test_recommendation_best_accuracy_latency_efficiency_balanced_and_warnings() -> None:
@@ -247,7 +569,110 @@ def test_recommendation_best_accuracy_latency_efficiency_balanced_and_warnings()
     assert recommendation.best_latency == "fallback"
     assert recommendation.best_efficiency == "fallback"
     assert recommendation.best_balanced in {"fallback", "uncertainty_cascade"}
+    assert recommendation.configured_objective == "balanced"
+    assert recommendation.recommended_strategy in {"fallback", "uncertainty_cascade"}
     assert any("slower than fallback" in warning for warning in recommendation.warnings)
+
+
+def test_balanced_score_zero_beats_negative_score() -> None:
+    zero = _summary("zero", accuracy=0.0, latency=10, calls=4)
+    negative = _summary(
+        "negative",
+        accuracy=0.0,
+        latency=30,
+        calls=8,
+        failures=1,
+    )
+
+    recommendation = recommend_from_summaries(
+        [zero, negative],
+        baseline_strategy="zero",
+        settings=LabRecommendationSettings(),
+    )
+
+    assert zero.balanced_score == pytest.approx(0.0)
+    assert negative.balanced_score is not None and negative.balanced_score < 0
+    assert recommendation.best_balanced == "zero"
+    assert recommendation.recommended_strategy is None
+
+
+@pytest.mark.parametrize("max_latency_ms", [None, 200])
+def test_primary_recommendation_excludes_all_failure_strategy(
+    max_latency_ms: int | None,
+) -> None:
+    safe = _summary("fallback", accuracy=1.0, latency=100, calls=4)
+    failed = _summary(
+        "parallel_synthesis",
+        accuracy=0.0,
+        latency=1,
+        calls=4,
+        failures=4,
+    )
+
+    recommendation = recommend_from_summaries(
+        [safe, failed],
+        baseline_strategy="fallback",
+        settings=LabRecommendationSettings(
+            objective="latency",
+            max_latency_ms=max_latency_ms,
+        ),
+    )
+
+    assert recommendation.best_latency == "parallel_synthesis"
+    assert recommendation.recommended_strategy == "fallback"
+
+
+def test_failed_lab_result_cannot_match_reference_sentinel() -> None:
+    result = FusionResult(
+        strategy="fallback",
+        final="No provider produced a usable answer.",
+        ok=False,
+        error="No provider produced a usable answer.",
+    )
+    example = LabExample(
+        id="failure-sentinel",
+        messages=[ChatMessage(role="user", content="fail")],
+        references=["No provider produced a usable answer."],
+    )
+
+    assert _grade_lab_output("exact", result, example) is False
+
+
+def test_result_card_recommendation_settings_round_trip(tmp_path: Path) -> None:
+    settings = LabRecommendationSettings(
+        objective="accuracy",
+        max_latency_ms=40,
+        prefer_lower_calls=False,
+    )
+    summaries = [
+        _summary("fallback", accuracy=0.75, latency=10, calls=4),
+        _summary("parallel_synthesis", accuracy=1.0, latency=50, calls=12),
+    ]
+    card = LabResultCard(
+        experiment=LabExperiment(name="settings-round-trip"),
+        timestamp="2026-07-10T00:00:00+00:00",
+        platform={},
+        python_version="3.13",
+        dataset={},
+        engines=[],
+        models=[],
+        strategies=summaries,
+        recommendations=recommend_from_summaries(
+            summaries,
+            baseline_strategy="fallback",
+            settings=settings,
+        ),
+        recommendation_settings=settings,
+    )
+    path = tmp_path / "card.json"
+    path.write_text(card.model_dump_json(), encoding="utf-8")
+
+    loaded = load_result_card(path)
+    regenerated = recommend_from_card(loaded)
+
+    assert loaded.recommendation_settings == settings
+    assert regenerated.configured_objective == "accuracy"
+    assert regenerated.recommended_strategy == "fallback"
 
 
 def test_warning_when_fusion_does_not_beat_fallback() -> None:
@@ -282,8 +707,8 @@ def test_strategy_comparison_delta_relative_ratio_and_divide_by_zero() -> None:
             total_latency_ms=80,
             avg_latency_ms=20,
             total_tokens=50,
-            accuracy_per_call=0.25,
-            accuracy_per_1k_tokens=20,
+            accuracy_per_call=1.0,
+            accuracy_per_1k_tokens=80,
         ),
     )
 
@@ -477,19 +902,20 @@ def _summary(
     tokens: int = 40,
     failures: int = 0,
 ) -> StrategyResultSummary:
+    correct = int(accuracy * 4)
     return StrategyResultSummary(
         strategy=strategy,
         metrics=LabMetricSummary(
             total_examples=4,
-            correct=int(accuracy * 4),
+            correct=correct,
             accuracy=accuracy,
             total_calls=calls,
             avg_calls_per_example=calls / 4,
             total_latency_ms=latency * 4,
             avg_latency_ms=latency,
             total_tokens=tokens,
-            accuracy_per_call=accuracy / calls if calls else 0.0,
-            accuracy_per_1k_tokens=accuracy / (tokens / 1000) if tokens else 0.0,
+            accuracy_per_call=correct / calls if calls else 0.0,
+            accuracy_per_1k_tokens=correct / (tokens / 1000) if tokens else 0.0,
             failures=failures,
         ),
     )

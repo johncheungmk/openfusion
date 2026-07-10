@@ -57,9 +57,15 @@ class WorkflowStep(BaseModel):
     stage: str
     provider: str | None = None
     model: str | None = None
+    provider_reported_model: str | None = None
     role_name: str | None = None
     status: Literal["ok", "error", "skipped", "fallback"] = "ok"
+    model_call: bool = False
     latency_ms: int | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float | None = None
     note: str | None = None
 
 
@@ -80,12 +86,16 @@ class OrchestrationPlan(BaseModel):
 class FusionResult(BaseModel):
     strategy: str
     final: str
+    ok: bool = True
+    error: str | None = None
     judge_provider: str | None = None
     judge_analysis: str | None = None
     critic_provider: str | None = None
     reviser_provider: str | None = None
     candidates: list[CandidateResult] = Field(default_factory=list)
     usage: Usage = Field(default_factory=Usage)
+    estimated_cost_usd: float | None = None
+    failed_model_calls: int = 0
     plan: OrchestrationPlan | None = None
     trace: list[WorkflowStep] = Field(default_factory=list)
     workflow_outputs: dict[str, str] = Field(default_factory=dict)
@@ -106,7 +116,9 @@ class OpenAIChatCompletionRequest(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     user: str | None = None
-    n: int | None = None
+    # OpenFusion currently returns one choice. Rejecting n > 1 avoids silently paying for and
+    # discarding additional upstream choices outside the model-call budget.
+    n: Literal[1] | None = None
     response_format: dict[str, Any] | None = None
     tools: list[dict[str, Any]] | None = None
     tool_choice: str | dict[str, Any] | None = None
@@ -124,21 +136,21 @@ class OpenAIChatCompletionRequest(BaseModel):
     fusion_critic: str | None = None
     fusion_reviser: str | None = None
     fusion_planner: str | None = None
-    fusion_samples_per_provider: int | None = None
-    fusion_refinement_rounds: int | None = None
-    fusion_max_total_calls: int | None = None
+    fusion_samples_per_provider: int | None = Field(default=None, ge=1)
+    fusion_refinement_rounds: int | None = Field(default=None, ge=0)
+    fusion_max_total_calls: int | None = Field(default=None, ge=1)
     fusion_vote_regex: str | None = None
     fusion_self_moa_provider: str | None = None
-    fusion_self_moa_samples: int | None = None
+    fusion_self_moa_samples: int | None = Field(default=None, ge=1)
     fusion_self_moa_mode: Literal["select", "synthesize"] | None = None
     fusion_structured_synthesis: bool | None = None
     fusion_ranker: str | None = None
-    fusion_rank_top_k: int | None = None
-    fusion_pairwise_rank_max_pairs: int | None = None
+    fusion_rank_top_k: int | None = Field(default=None, ge=1)
+    fusion_pairwise_rank_max_pairs: int | None = Field(default=None, ge=1)
     fusion_pairwise_rank_mode: Literal["pairwise", "score"] | None = None
     fusion_cascade_providers: list[str] | None = None
-    fusion_cascade_confidence_threshold: float | None = None
-    fusion_cascade_consistency_samples: int | None = None
+    fusion_cascade_confidence_threshold: float | None = Field(default=None, ge=0, le=1)
+    fusion_cascade_consistency_samples: int | None = Field(default=None, ge=1)
 
     def effective_max_tokens(self) -> int | None:
         if self.max_completion_tokens is not None:

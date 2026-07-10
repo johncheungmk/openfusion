@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use OpenFusion in research, please cite this software release."
+title: "OpenFusion: Open-source multi-model orchestration and fusion runtime"
+type: software
+authors:
+  - family-names: Cheung
+    given-names: John
+version: 0.6.0
+date-released: 2026-07-10
+repository-code: "https://github.com/johncheungmk/openfusion"
+url: "https://johncheungmk.github.io/openfusion/"
+license: MIT
+keywords:
+  - large language models
+  - mixture of agents
+  - model fusion
+  - model orchestration
+  - inference-time compute
+  - evaluation

@@ -1,5 +1,10 @@
 # Migrating from OpenFusion v0.1 to v0.2
 
+!!! warning "Historical v0.2 migration guide"
+    This page is retained for users reconstructing the v0.1-to-v0.2 transition. It is not a
+    current upgrade guide and its examples do not describe all v0.6 fields or behavior. For current
+    release checks, see the [release process](development/release-process.md).
+
 ## Compatible behavior
 
 Existing provider blocks remain valid. Existing `panel_judge`, `parallel_judge`, and `fusion` strategy names remain accepted as aliases for `parallel_synthesis`.

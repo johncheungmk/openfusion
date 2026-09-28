@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Added a published Lab case study: five local models across two DGX Spark machines on a
+  94-item programmatic benchmark (OFBench). Documents a statistically significant equal-weight
+  fusion regression (exact McNemar p = 0.023), calibration recovery, and a confidence-gated
+  escalation policy gaining +15.7 pp over the best single model (p = 0.001) at 40% of
+  flagship calls. Includes dataset, config, result card, and reproduction steps.
+- Related work now covers anchor corruption with trust-ratio damping (arXiv 2606.00405)
+  and the consensus trap under correlated failures (arXiv 2604.17139) (2026 preprints).
+- Published `examples/ofbench_{all,dev,test}.jsonl`, a runnable
+  `examples/ofbench_spark_lab.yaml`, and the dev result card at
+  `results/ofbench-dev-v1.json`.
+
 ## 0.6.0
 
 - Added the order-balanced `llm_pairwise_swap` grader with explicit abstention and

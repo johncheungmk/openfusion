@@ -80,6 +80,7 @@ nav:
       - Related Work: research/related-work.md
       - Benchmarking: research/benchmarks.md
       - Reporting Results: research/reporting-results.md
+      - Case Study (DGX Spark): research/case-study-spark-escalation.md
   - Development:
       - Contributing: development/contributing.md
       - Codex Workflow: development/codex-workflow.md

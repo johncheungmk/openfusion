@@ -228,3 +228,11 @@ Before writing "strategy X improves quality," verify that:
 - intervals and paired comparisons support the claimed difference;
 - the result names the exact models and evaluation date;
 - the claim is limited to the evaluated task and budget.
+
+## Published case study
+
+A complete worked example — five local Ollama models across two DGX Spark machines, a
+negative fusion result, calibration recovery, and a confidence-gated escalation policy
+(+15.7 pp, exact McNemar p = 0.001 on a held-out split) — is documented in the
+[DGX Spark case study](case-study-spark-escalation.md). It is the reference pattern for
+reporting your own Lab experiments.

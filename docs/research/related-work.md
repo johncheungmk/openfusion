@@ -48,6 +48,19 @@ unreviewed preprint) proposes the all-model-wrong rate as an upper bound for met
 must select one member answer. This is a useful Lab diagnostic hypothesis, but the paper is
 too recent to treat as settled evidence.
 
+Two 2026 preprints sharpen *why* equal-weight mixing of unequal models can actively degrade
+the strongest member. Work on structured multi-LLM message passing describes
+[anchor corruption](https://arxiv.org/abs/2606.00405) (posted 2026, unreviewed preprint),
+where naive aggregation drags a high-reliability model down toward weaker
+neighbours, and mitigates it with asymmetric damping that shields trusted models. The
+[consensus trap](https://arxiv.org/abs/2604.17139) (posted 2026, unreviewed preprint)
+analyses response-level voting through epistemic social choice and shows that correlated
+failures break the independence assumption that majority voting relies on. OpenFusion's
+`uncertainty_cascade` and calibrated escalation (see the
+[Spark case study](case-study-spark-escalation.md)) take the same lesson from the opposite
+direction: rather than damp votes, detect low-confidence consensus and hand off to a
+stronger model — a cheaper, transparent special case of trust-weighted aggregation.
+
 ## Routing and cascading
 
 [Hybrid LLM](https://proceedings.iclr.cc/paper_files/paper/2024/hash/b47d93c99fa22ac0b377578af0a1f63a-Abstract-Conference.html)

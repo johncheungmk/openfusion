@@ -14,7 +14,7 @@ A useful experiment has a task, a primary metric, a budget, and a baseline:
 Avoid questions such as "does fusion work?" They combine unrelated tasks and leave the
 budget undefined.
 
-## Current v0.6.0 evaluation path
+## Current v0.6.1 evaluation path
 
 OpenFusion currently supports:
 

@@ -5,8 +5,8 @@ type: software
 authors:
   - family-names: Cheung
     given-names: John
-version: 0.6.0
-date-released: 2026-07-10
+version: 0.6.1
+date-released: 2026-09-29
 repository-code: "https://github.com/johncheungmk/openfusion"
 url: "https://johncheungmk.github.io/openfusion/"
 license: MIT

@@ -10,7 +10,7 @@ are part of the result.
 
 ## Current support
 
-OpenFusion v0.6.0 provides local JSONL evaluation, direct-provider and fallback baselines,
+OpenFusion v0.6.1 provides local JSONL evaluation, direct-provider and fallback baselines,
 exact/regex grading, optional LLM pairwise or rubric grading, calls, end-to-end latency,
 token totals, failures, result-card hashes, and a hard `max_total_calls` administrator
 ceiling. The v0.6 reliability additions are:

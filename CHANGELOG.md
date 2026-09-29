@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 — 2026-09-29
 
 - Pinned the lint toolchain (`ruff==0.16.9`) after unpinned CI ruff drifted to a stricter
   release; fixed the findings it raised in existing sources (import order, annotation

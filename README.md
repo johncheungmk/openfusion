@@ -2,7 +2,7 @@
 
 ![OpenFusion — open-source multi-model orchestration and fusion runtime](assets/openfusion-banner.svg)
 
-OpenFusion v0.6.0 is an open-source, OpenAI-compatible runtime for multi-model orchestration, model fusion, and local benchmark experiments.
+OpenFusion v0.6.1 is an open-source, OpenAI-compatible runtime for multi-model orchestration, model fusion, and local benchmark experiments.
 
 It supports local and cloud models through OpenAI-compatible APIs, including Ollama, vLLM, LM Studio, LiteLLM, OpenRouter-compatible endpoints, and other `/v1/chat/completions` servers.
 

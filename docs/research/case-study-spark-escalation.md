@@ -2,7 +2,7 @@
 
 This page reports a complete OpenFusion Lab experiment run on real hardware, including a
 negative result, a diagnosis, and the escalation policy that turned it into a measurable
-gain. It follows the reporting policy in [Reporting Results](../reporting-results.md):
+gain. It follows the reporting policy in [Reporting Results](reporting-results.md):
 dataset and configuration are published, uncertainty is reported, and the negative results
 are shown alongside the improvement.
 

@@ -1,0 +1,13 @@
+{
+  "records": 3040,
+  "grades": 3040,
+  "tasks": 500,
+  "arm_counts": {
+    "moa": 1000,
+    "qwen_repair": 1000,
+    "single": 1000,
+    "stronger": 40
+  },
+  "issues": [],
+  "passed": true
+}

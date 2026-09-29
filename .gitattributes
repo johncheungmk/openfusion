@@ -6,3 +6,5 @@
 *.md text eol=lf
 *.toml text eol=lf
 *.svg text eol=lf
+# Registered JSON byte hashes include CRLF; retain exact bytes and recognize CRLF.
+examples/results/prospective-2026-09-29/*.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

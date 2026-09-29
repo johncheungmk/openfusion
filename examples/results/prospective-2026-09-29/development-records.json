@@ -1,0 +1,1169 @@
+[
+  {
+    "id": "MBPP-579",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    union = set1.union(set2)\n    return tuple(union)\n```",
+        "output_tokens": 55,
+        "input_tokens": 132,
+        "finish": "stop",
+        "load_ns": 181051279,
+        "generation_ns": 704677000,
+        "prefill_ns": 3332641000,
+        "elapsed": 4.241106517845765,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "AssertionError: "
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.2138888519257307
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 4.455017674015835,
+    "created_utc": "2026-09-29T06:58:06.296757+00:00"
+  },
+  {
+    "id": "MBPP-555",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef difference(n):\n    sum_of_cubes = sum(i**3 for i in range(1, n + 1))\n    sum_of_numbers = sum(i for i in range(1, n + 1))\n    return sum_of_cubes - sum_of_numbers\n```",
+        "output_tokens": 61,
+        "input_tokens": 101,
+        "finish": "stop",
+        "load_ns": 150311956,
+        "generation_ns": 791023000,
+        "prefill_ns": 15076000,
+        "elapsed": 0.9690878039691597,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.1754799480549991
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.1445896090008318,
+    "created_utc": "2026-09-29T07:05:05.350276+00:00"
+  },
+  {
+    "id": "MBPP-554",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef Split(list):\n    return [x for x in list if x % 2 != 0]\n```",
+        "output_tokens": 167,
+        "input_tokens": 151,
+        "finish": "stop",
+        "elapsed": 4.922158633125946,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.21359370299614966
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 5.13579761586152,
+    "created_utc": "2026-09-29T07:00:20.950118+00:00"
+  },
+  {
+    "id": "MBPP-595",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef min_Swaps(str1, str2):\n    if len(str1) != len(str2):\n        return -1\n\n    need_one = 0\n    need_zero = 0\n\n    for a, b in zip(str1, str2):\n        if a == b:\n            continue\n\n        if a == '0' and b == '1':\n            need_one += 1\n        elif a == '1' and b == '0':\n            need_zero += 1\n        else:\n            return -1\n\n    if need_one != need_zero:\n        return -1\n\n    return need_one\n```",
+        "output_tokens": 2537,
+        "input_tokens": 160,
+        "finish": "stop",
+        "elapsed": 56.73074080585502,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.23830231511965394
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 56.9691122090444,
+    "created_utc": "2026-09-29T06:59:11.908468+00:00"
+  },
+  {
+    "id": "MBPP-559",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef max_sub_array_sum(a, size):\n    max_sum = a[0]\n    current_sum = a[0]\n    \n    for i in range(1, size):\n        current_sum = max(a[i], current_sum + a[i])\n        max_sum = max(max_sum, current_sum)\n    \n    return max_sum\n```",
+        "output_tokens": 72,
+        "input_tokens": 120,
+        "finish": "stop",
+        "load_ns": 140953143,
+        "generation_ns": 930785000,
+        "prefill_ns": 15840000,
+        "elapsed": 1.094736723927781,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.18726515187881887
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.2820465320255607,
+    "created_utc": "2026-09-29T07:03:51.411544+00:00"
+  },
+  {
+    "id": "MBPP-559",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef max_sub_array_sum(a, size):\n    max_sum = a[0]\n    current_sum = a[0]\n    \n    for i in range(1, size):\n        current_sum = max(a[i], current_sum + a[i])\n        max_sum = max(max_sum, current_sum)\n    \n    return max_sum\n```",
+        "output_tokens": 72,
+        "input_tokens": 120,
+        "finish": "stop",
+        "load_ns": 135103519,
+        "generation_ns": 1307065000,
+        "prefill_ns": 18616000,
+        "elapsed": 1.4695229569915682,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.16939277993515134
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.638948024949059,
+    "created_utc": "2026-09-29T07:00:15.813974+00:00"
+  },
+  {
+    "id": "MBPP-579",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 1,
+    "calls": [
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    union = set1.union(set2)\n    return tuple(union)\n```",
+        "output_tokens": 55,
+        "input_tokens": 132,
+        "finish": "stop",
+        "load_ns": 155802249,
+        "generation_ns": 714941000,
+        "prefill_ns": 13999000,
+        "elapsed": 0.903295808006078,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "AssertionError: "
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.16725073801353574
+        },
+        "tag": "qwen"
+      },
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    return tuple(x for x in test_tup1 if x not in test_tup2) + tuple(x for x in test_tup2 if x not in test_tup1)\n\n# Example usage:\nassert find_dissimilar((3, 4, 5, 6), (5, 7, 4, 10)) == (3, 6, 7, 10)\n```",
+        "output_tokens": 105,
+        "input_tokens": 124,
+        "finish": "stop",
+        "load_ns": 3198506310,
+        "generation_ns": 1340728000,
+        "prefill_ns": 70250000,
+        "elapsed": 4.614319241140038,
+        "model": "of-phi4-mini",
+        "temperature": 0.7,
+        "seed": 17430,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.1870573500636965
+        },
+        "tag": "phi"
+      }
+    ],
+    "elapsed": 5.871976112946868,
+    "created_utc": "2026-09-29T07:03:57.283749+00:00"
+  },
+  {
+    "id": "MBPP-595",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef min_Swaps(str1, str2):\n    # If the strings are already the same, no swaps needed\n    if str1 == str2:\n        return 0\n    \n    # Count positions where the bits differ\n    diff_count = 0\n    for i in range(len(str1)):\n        if str1[i] != str2[i]:\n            diff_count += 1\n    \n    # For binary strings, if there are an even number of differences,\n    # we can fix them with diff_count // 2 swaps\n    # If odd, we need (diff_count + 1) // 2 swaps\n    # But actually, each swap can fix at most 2 differences\n    # So minimum swaps = diff_count // 2\n    # If diff_count is odd, we need one more swap to fix the last difference\n    # So minimum swaps = (diff_count + 1) // 2\n    \n    return (diff_count + 1) // 2\n```",
+        "output_tokens": 210,
+        "input_tokens": 112,
+        "finish": "stop",
+        "load_ns": 176633842,
+        "generation_ns": 2752670000,
+        "prefill_ns": 13993000,
+        "elapsed": 2.9646192491054535,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.21289001312106848
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 3.1775451661087573,
+    "created_utc": "2026-09-29T06:58:09.474641+00:00"
+  },
+  {
+    "id": "MBPP-554",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef Split(list):\n    return [x for x in list if x % 2 != 0]\n```",
+        "output_tokens": 26,
+        "input_tokens": 102,
+        "finish": "stop",
+        "load_ns": 147872243,
+        "generation_ns": 331786000,
+        "prefill_ns": 13186000,
+        "elapsed": 0.49951785011217,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17176966089755297
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 0.671309064142406,
+    "created_utc": "2026-09-29T06:59:21.213320+00:00"
+  },
+  {
+    "id": "MBPP-599",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef sum_average(number):\n    total_sum = number * (number + 1) // 2\n    average = total_sum / number\n    return (total_sum, average)\n```",
+        "output_tokens": 42,
+        "input_tokens": 93,
+        "finish": "stop",
+        "load_ns": 118511361,
+        "generation_ns": 539563000,
+        "prefill_ns": 15072000,
+        "elapsed": 0.6926581510342658,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.19118494703434408
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 0.8838640418834984,
+    "created_utc": "2026-09-29T06:59:59.306161+00:00"
+  },
+  {
+    "id": "MBPP-594",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef diff_even_odd(list1):\n    first_even = None\n    first_odd = None\n    \n    for num in list1:\n        if num % 2 == 0:\n            if first_even is None:\n                first_even = num\n        else:\n            if first_odd is None:\n                first_odd = num\n    \n    if first_even is None or first_odd is None:\n        return 0\n    \n    return first_even - first_odd\n```",
+        "output_tokens": 95,
+        "input_tokens": 108,
+        "finish": "stop",
+        "load_ns": 160382071,
+        "generation_ns": 1231788000,
+        "prefill_ns": 13922000,
+        "elapsed": 1.4248709410894662,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.16995072294957936
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.594852128997445,
+    "created_utc": "2026-09-29T06:59:22.808493+00:00"
+  },
+  {
+    "id": "MBPP-595",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef min_Swaps(str1, str2):\n    # If the strings are already the same, no swaps needed\n    if str1 == str2:\n        return 0\n    \n    # Count positions where the bits differ\n    diff_count = 0\n    for i in range(len(str1)):\n        if str1[i] != str2[i]:\n            diff_count += 1\n    \n    # For binary strings, if there are an even number of differences,\n    # we can fix them with diff_count // 2 swaps\n    # If odd, we need (diff_count + 1) // 2 swaps\n    # But actually, each swap can fix at most 2 differences\n    # So minimum swaps = diff_count // 2\n    # If diff_count is odd, we need one more swap to fix the last difference\n    # So minimum swaps = (diff_count + 1) // 2\n    \n    return (diff_count + 1) // 2\n```",
+        "output_tokens": 210,
+        "input_tokens": 112,
+        "finish": "stop",
+        "load_ns": 153984381,
+        "generation_ns": 2768047000,
+        "prefill_ns": 14096000,
+        "elapsed": 2.9502105379942805,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.18974280799739063
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 3.14000041782856,
+    "created_utc": "2026-09-29T07:00:03.471675+00:00"
+  },
+  {
+    "id": "MBPP-586",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef split_Arr(l, n):\n    if n < 0 or n >= len(l):\n        return l[:]\n    \n    first_part = l[:n]\n    second_part = l[n:]\n    \n    return second_part + first_part\n```",
+        "output_tokens": 54,
+        "input_tokens": 130,
+        "finish": "stop",
+        "load_ns": 143608967,
+        "generation_ns": 697400000,
+        "prefill_ns": 14050000,
+        "elapsed": 0.8710333670023829,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.16705937101505697
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.0381217780523002,
+    "created_utc": "2026-09-29T06:59:23.846824+00:00"
+  },
+  {
+    "id": "MBPP-555",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef difference(n):\n    s = n * (n + 1) // 2\n    return s * s - s\n```",
+        "output_tokens": 221,
+        "input_tokens": 149,
+        "finish": "stop",
+        "elapsed": 4.482954089995474,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.22779444907791913
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 4.710799946915358,
+    "created_utc": "2026-09-29T07:03:50.129150+00:00"
+  },
+  {
+    "id": "MBPP-594",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef diff_even_odd(list1):\n    first_even = None\n    first_odd = None\n\n    for num in list1:\n        if first_even is None and num % 2 == 0:\n            first_even = num\n        if first_odd is None and num % 2 != 0:\n            first_odd = num\n        if first_even is not None and first_odd is not None:\n            break\n\n    if first_even is None or first_odd is None:\n        return None\n\n    return first_even - first_odd\n```",
+        "output_tokens": 1456,
+        "input_tokens": 156,
+        "finish": "stop",
+        "elapsed": 34.359844726044685,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.2151331310160458
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 34.575020210118964,
+    "created_utc": "2026-09-29T06:59:58.422049+00:00"
+  },
+  {
+    "id": "MBPP-586",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef split_Arr(l, n):\n    if n < 0 or n >= len(l):\n        return l[:]\n    \n    first_part = l[:n]\n    second_part = l[n:]\n    \n    return second_part + first_part\n```",
+        "output_tokens": 54,
+        "input_tokens": 130,
+        "finish": "stop",
+        "load_ns": 137748481,
+        "generation_ns": 692930000,
+        "prefill_ns": 34225000,
+        "elapsed": 0.876936529064551,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.19613616890273988
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.0731110339984298,
+    "created_utc": "2026-09-29T06:58:14.939131+00:00"
+  },
+  {
+    "id": "MBPP-599",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef sum_average(number):\n    if number <= 0:\n        return (0, 0.0)\n\n    total = number * (number + 1) // 2\n    average = total / number\n    return (total, average)\n```",
+        "output_tokens": 356,
+        "input_tokens": 142,
+        "finish": "stop",
+        "elapsed": 7.989197097020224,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.22002390190027654
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 8.209266342921183,
+    "created_utc": "2026-09-29T07:00:11.681304+00:00"
+  },
+  {
+    "id": "MBPP-579",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "",
+        "output_tokens": 8192,
+        "input_tokens": 181,
+        "finish": "length",
+        "elapsed": 204.27085821912624,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "NameError: name 'find_dissimilar' is not defined"
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.19671145593747497
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 204.46759487502277,
+    "created_utc": "2026-09-29T07:03:45.417966+00:00"
+  },
+  {
+    "id": "MBPP-555",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef difference(n):\n    sum_of_cubes = sum(i**3 for i in range(1, n + 1))\n    sum_of_numbers = sum(i for i in range(1, n + 1))\n    return sum_of_cubes - sum_of_numbers\n```",
+        "output_tokens": 61,
+        "input_tokens": 101,
+        "finish": "stop",
+        "load_ns": 165881483,
+        "generation_ns": 782286000,
+        "prefill_ns": 29044000,
+        "elapsed": 0.9892086309846491,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17124332510866225
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.1605080200824887,
+    "created_utc": "2026-09-29T06:58:12.935787+00:00"
+  },
+  {
+    "id": "MBPP-579",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 3,
+    "calls": [
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    union = set1.union(set2)\n    return tuple(union)\n```",
+        "output_tokens": 55,
+        "input_tokens": 132,
+        "finish": "stop",
+        "load_ns": 138427781,
+        "generation_ns": 1005506000,
+        "prefill_ns": 61909000,
+        "elapsed": 1.225683351047337,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "AssertionError: "
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.15176168689504266
+        },
+        "tag": "qwen"
+      },
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    union = set1.union(set2)\n    return tuple(union)\n```",
+        "output_tokens": 55,
+        "input_tokens": 249,
+        "finish": "stop",
+        "load_ns": 161636799,
+        "generation_ns": 1021680000,
+        "prefill_ns": 61201000,
+        "elapsed": 1.2506394749507308,
+        "model": "of-qwen3-4b",
+        "temperature": 0.7,
+        "seed": 17430,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "AssertionError: "
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.16054726811125875
+        },
+        "tag": "qwen"
+      },
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    union = set1.union(set2)\n    return tuple(union)\n```",
+        "output_tokens": 55,
+        "input_tokens": 249,
+        "finish": "stop",
+        "load_ns": 184533270,
+        "generation_ns": 1015334000,
+        "prefill_ns": 32307000,
+        "elapsed": 1.241925718029961,
+        "model": "of-qwen3-4b",
+        "temperature": 0.7,
+        "seed": 17431,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "AssertionError: "
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.1854925591032952
+        },
+        "tag": "qwen"
+      },
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    union = set1.union(set2)\n    return tuple(union)\n```",
+        "output_tokens": 55,
+        "input_tokens": 248,
+        "finish": "stop",
+        "load_ns": 148153782,
+        "generation_ns": 1018846000,
+        "prefill_ns": 31448000,
+        "elapsed": 1.206522017950192,
+        "model": "of-qwen3-4b",
+        "temperature": 0.7,
+        "seed": 17432,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": false,
+              "error": "AssertionError: "
+            }
+          ],
+          "pass": false,
+          "elapsed": 0.17119775712490082
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 5.593938427977264,
+    "created_utc": "2026-09-29T06:58:01.841451+00:00"
+  },
+  {
+    "id": "MBPP-559",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef max_sub_array_sum(a, size):\n    max_sum = a[0]\n    current_sum = a[0]\n    \n    for i in range(1, size):\n        current_sum = max(a[i], current_sum + a[i])\n        max_sum = max(max_sum, current_sum)\n    \n    return max_sum\n```",
+        "output_tokens": 72,
+        "input_tokens": 120,
+        "finish": "stop",
+        "load_ns": 153953900,
+        "generation_ns": 936622000,
+        "prefill_ns": 32941000,
+        "elapsed": 1.1391956019215286,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17626606998965144
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.3154929201118648,
+    "created_utc": "2026-09-29T07:00:14.174649+00:00"
+  },
+  {
+    "id": "MBPP-586",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef split_Arr(l, n):\n    if n < 0 or n >= len(l):\n        return l[:]\n    \n    first_part = l[:n]\n    second_part = l[n:]\n    \n    return second_part + first_part\n```",
+        "output_tokens": 54,
+        "input_tokens": 130,
+        "finish": "stop",
+        "load_ns": 132850144,
+        "generation_ns": 698114000,
+        "prefill_ns": 13217000,
+        "elapsed": 0.8541539199650288,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17077675997279584
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.02495285612531,
+    "created_utc": "2026-09-29T07:00:00.331351+00:00"
+  },
+  {
+    "id": "MBPP-595",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef min_Swaps(str1, str2):\n    # If the strings are already the same, no swaps needed\n    if str1 == str2:\n        return 0\n    \n    # Count positions where the bits differ\n    diff_count = 0\n    for i in range(len(str1)):\n        if str1[i] != str2[i]:\n            diff_count += 1\n    \n    # For binary strings, if there are an even number of differences,\n    # we can fix them with diff_count // 2 swaps\n    # If odd, we need (diff_count + 1) // 2 swaps\n    # But actually, each swap can fix at most 2 differences\n    # So minimum swaps = diff_count // 2\n    # If diff_count is odd, we need one more swap to fix the last difference\n    # So total swaps = (diff_count + 1) // 2\n    \n    return (diff_count + 1) // 2\n```",
+        "output_tokens": 210,
+        "input_tokens": 112,
+        "finish": "stop",
+        "load_ns": 2993339284,
+        "generation_ns": 3843057000,
+        "prefill_ns": 65083000,
+        "elapsed": 6.923575411085039,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17341969185508788
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 7.097115664044395,
+    "created_utc": "2026-09-29T06:57:56.247155+00:00"
+  },
+  {
+    "id": "MBPP-594",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef diff_even_odd(list1):\n    first_even = None\n    first_odd = None\n    \n    for num in list1:\n        if num % 2 == 0:\n            if first_even is None:\n                first_even = num\n        else:\n            if first_odd is None:\n                first_odd = num\n    \n    if first_even is None or first_odd is None:\n        return 0\n    \n    return first_even - first_odd\n```",
+        "output_tokens": 95,
+        "input_tokens": 108,
+        "finish": "stop",
+        "load_ns": 162317267,
+        "generation_ns": 1229145000,
+        "prefill_ns": 30738000,
+        "elapsed": 1.4425784619525075,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.15921557787805796
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.6018251599743962,
+    "created_utc": "2026-09-29T06:58:11.076795+00:00"
+  },
+  {
+    "id": "MBPP-554",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef Split(list):\n    return [x for x in list if x % 2 != 0]\n```",
+        "output_tokens": 26,
+        "input_tokens": 102,
+        "finish": "stop",
+        "load_ns": 145216450,
+        "generation_ns": 326783000,
+        "prefill_ns": 30133000,
+        "elapsed": 0.5180951089132577,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17965346295386553
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 0.6977761571761221,
+    "created_utc": "2026-09-29T06:58:11.774935+00:00"
+  },
+  {
+    "id": "MBPP-599",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef sum_average(number):\n    total_sum = number * (number + 1) // 2\n    average = total_sum / number\n    return (total_sum, average)\n```",
+        "output_tokens": 42,
+        "input_tokens": 93,
+        "finish": "stop",
+        "load_ns": 167041986,
+        "generation_ns": 545552000,
+        "prefill_ns": 27852000,
+        "elapsed": 0.7567866109311581,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17274218401871622
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 0.9295588589739054,
+    "created_utc": "2026-09-29T06:58:13.865685+00:00"
+  },
+  {
+    "id": "MBPP-599",
+    "arm": "qwen_repair",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef sum_average(number):\n    total_sum = number * (number + 1) // 2\n    average = total_sum / number\n    return (total_sum, average)\n```",
+        "output_tokens": 42,
+        "input_tokens": 93,
+        "finish": "stop",
+        "load_ns": 149569487,
+        "generation_ns": 545735000,
+        "prefill_ns": 15033000,
+        "elapsed": 0.7300428547896445,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.15936610801145434
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 0.8894295711070299,
+    "created_utc": "2026-09-29T06:59:19.818882+00:00"
+  },
+  {
+    "id": "MBPP-554",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef Split(list):\n    return [x for x in list if x % 2 != 0]\n```",
+        "output_tokens": 26,
+        "input_tokens": 102,
+        "finish": "stop",
+        "load_ns": 162688822,
+        "generation_ns": 335089000,
+        "prefill_ns": 14087000,
+        "elapsed": 0.5291919459123164,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.19343950599431992
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 0.7226538208778948,
+    "created_utc": "2026-09-29T06:59:20.541772+00:00"
+  },
+  {
+    "id": "MBPP-594",
+    "arm": "moa",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef diff_even_odd(list1):\n    first_even = None\n    first_odd = None\n    \n    for num in list1:\n        if num % 2 == 0:\n            if first_even is None:\n                first_even = num\n        else:\n            if first_odd is None:\n                first_odd = num\n    \n    if first_even is None or first_odd is None:\n        return 0\n    \n    return first_even - first_odd\n```",
+        "output_tokens": 95,
+        "input_tokens": 108,
+        "finish": "stop",
+        "load_ns": 122117354,
+        "generation_ns": 1226582000,
+        "prefill_ns": 13180000,
+        "elapsed": 1.3774994399864227,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.19093723106198013
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.5684870230033994,
+    "created_utc": "2026-09-29T07:03:58.852595+00:00"
+  },
+  {
+    "id": "MBPP-586",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef split_Arr(l, n):\n    return l[n:] + l[:n]\n```",
+        "output_tokens": 304,
+        "input_tokens": 179,
+        "finish": "stop",
+        "elapsed": 6.813017450971529,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.2075138119980693
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 7.020567710977048,
+    "created_utc": "2026-09-29T06:59:18.929241+00:00"
+  },
+  {
+    "id": "MBPP-555",
+    "arm": "single",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef difference(n):\n    sum_of_cubes = sum(i**3 for i in range(1, n + 1))\n    sum_of_numbers = sum(i for i in range(1, n + 1))\n    return sum_of_cubes - sum_of_numbers\n```",
+        "output_tokens": 61,
+        "input_tokens": 101,
+        "finish": "stop",
+        "load_ns": 144093739,
+        "generation_ns": 805805000,
+        "prefill_ns": 14975000,
+        "elapsed": 0.9849112499505281,
+        "model": "of-qwen3-4b",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 2048,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.19220368610695004
+        },
+        "tag": "qwen"
+      }
+    ],
+    "elapsed": 1.1771436559502035,
+    "created_utc": "2026-09-29T07:00:12.858802+00:00"
+  },
+  {
+    "id": "MBPP-559",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "\n\n```python\ndef max_sub_array_sum(a, size):\n    max_ending_here = 0\n    max_so_far = 0\n\n    for i in range(size):\n        max_ending_here += a[i]\n\n        if max_ending_here < 0:\n            max_ending_here = 0\n\n        if max_ending_here > max_so_far:\n            max_so_far = max_ending_here\n\n    return max_so_far\n```",
+        "output_tokens": 3003,
+        "input_tokens": 168,
+        "finish": "stop",
+        "elapsed": 65.10331093217246,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.24929325701668859
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 65.35265587014146,
+    "created_utc": "2026-09-29T07:05:04.205449+00:00"
+  }
+]

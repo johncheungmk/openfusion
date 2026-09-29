@@ -12,6 +12,10 @@ latency, calls, tokens, optional complete-cost estimates, and improvement or reg
 
 ## Documentation
 
+The [prospective MoA deployment study](docs/research/prospective-moa-deployment.md)
+tests one preselected workflow on 500 previously unused programming tasks, with a
+registered comparison against Qwen repair and explicit accuracy and resource criteria.
+
 Full documentation is available at:
 
 <https://johncheungmk.github.io/openfusion/>

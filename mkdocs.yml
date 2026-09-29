@@ -78,6 +78,7 @@ nav:
       - Dify Integration: deployment/dify-integration.md
       - LiteLLM Integration: deployment/litellm-integration.md
   - Research:
+      - Prospective MoA Deployment Test: research/prospective-moa-deployment.md
       - MoA Method and Model Comparison: research/moa-method-model-ablation.md
       - Kev Selection on Spark: research/kev-selection-spark.md
       - Related Work: research/related-work.md

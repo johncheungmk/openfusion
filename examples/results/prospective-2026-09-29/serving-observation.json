@@ -1,0 +1,69 @@
+{
+  "captured_utc": "2026-09-29T07:25:55.754955+00:00",
+  "phase": "during confirmation",
+  "node_a": {
+    "models": [
+      {
+        "name": "of-qwen3-4b:latest",
+        "model": "of-qwen3-4b:latest",
+        "size": 3873366343,
+        "digest": "9c66327caccbe43326695b815416d55cc9958f1e9805b6d00fb844d0d2ae5340",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "qwen3",
+          "families": [
+            "qwen3"
+          ],
+          "parameter_size": "4.0B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-09-29T16:25:55.74124488+08:00",
+        "size_vram": 3873366343,
+        "context_length": 8192
+      }
+    ]
+  },
+  "node_b": {
+    "models": [
+      {
+        "name": "of-gemma3-4b:latest",
+        "model": "of-gemma3-4b:latest",
+        "size": 3029157806,
+        "digest": "bb3fa28da046422b7223ce7ec8527e4f9fc35b147ce7878918a12ca07f6f1fae",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma3",
+          "families": [
+            "gemma3"
+          ],
+          "parameter_size": "4.3B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-09-29T16:25:37.258094897+08:00",
+        "size_vram": 3029157806,
+        "context_length": 8192
+      },
+      {
+        "name": "of-phi4-mini:latest",
+        "model": "of-phi4-mini:latest",
+        "size": 3699994787,
+        "digest": "48d9a121d662c4514449d2cbaef02528cf4c07639a705bd002a9905b5f57cc5c",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "phi3",
+          "families": [
+            "phi3"
+          ],
+          "parameter_size": "3.8B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-09-29T16:25:34.67494473+08:00",
+        "size_vram": 3699994787,
+        "context_length": 8192
+      }
+    ]
+  }
+}

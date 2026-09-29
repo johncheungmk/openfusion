@@ -18,4 +18,3 @@ the objects, or normalize CRLF to LF and compare the text. The corrected artifac
 must equal the checksums in the unchanged protocol.
 
 This is a publication serialization correction, not a protocol or task-selection change.
-

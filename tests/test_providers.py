@@ -15,7 +15,7 @@ from openfusion.schema import ChatMessage, ProviderRequest
 async def test_http_status_error_includes_status_snippet_without_secrets(monkeypatch) -> None:
     monkeypatch.setenv("TEST_PROVIDER_API_KEY", "secret-token")
 
-    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+    def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             401,
             text="bad key secret-token Authorization: Bearer secret-token",
@@ -48,7 +48,7 @@ async def test_http_status_error_includes_status_snippet_without_secrets(monkeyp
 
 @pytest.mark.asyncio
 async def test_http_status_error_redacts_configured_header_secrets() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+    def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             403,
             text="upstream rejected X-Api-Key header-secret-value",
@@ -152,7 +152,7 @@ async def test_extra_body_cannot_override_fixed_provider_request_fields() -> Non
 
 @pytest.mark.asyncio
 async def test_missing_upstream_usage_keeps_estimated_cost_incomplete() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+    def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
@@ -189,7 +189,7 @@ async def test_missing_upstream_usage_keeps_estimated_cost_incomplete() -> None:
 
 @pytest.mark.asyncio
 async def test_provider_reported_model_is_preserved_in_trace() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+    def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
             json={
@@ -240,7 +240,7 @@ async def test_provider_reported_model_is_preserved_in_trace() -> None:
 async def test_invalid_usage_does_not_produce_complete_cost(
     usage: dict[str, int | None],
 ) -> None:
-    def handler(request: httpx.Request) -> httpx.Response:  # noqa: ARG001
+    def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
             json={

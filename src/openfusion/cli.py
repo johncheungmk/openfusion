@@ -535,13 +535,13 @@ def _format_ratio(value: float | None) -> str:
     return f"{value:.2f}x"
 
 
-def _format_ms(value: float | int | None) -> str:
+def _format_ms(value: float | None) -> str:
     if value is None:
         return "-"
     return f"{value:.0f} ms"
 
 
-def _format_float(value: float | int | None, *, digits: int = 2) -> str:
+def _format_float(value: float | None, *, digits: int = 2) -> str:
     if value is None:
         return "-"
     return f"{value:.{digits}f}"

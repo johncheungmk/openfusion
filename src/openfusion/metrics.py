@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 
-
 WILSON_95_Z = 1.959963984540054
 
 

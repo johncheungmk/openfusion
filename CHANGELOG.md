@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pinned the lint toolchain (`ruff==0.16.9`) after unpinned CI ruff drifted to a stricter
+  release; fixed the findings it raised in existing sources (import order, annotation
+  cleanups, `TypeError` for invalid-type guards in `load_config`/lab loaders — no test or
+  runtime path depends on the previous `ValueError` at these guards).
+
 - Added a published Lab case study: five local models across two DGX Spark machines on a
   94-item programmatic benchmark (OFBench). Documents a statistically significant equal-weight
   fusion regression (exact McNemar p = 0.023), calibration recovery, and a confidence-gated

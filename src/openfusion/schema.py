@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 Role = Literal["system", "developer", "user", "assistant", "tool"]
 MessageContent = str | list[dict[str, Any]]
 
@@ -31,7 +30,7 @@ class Usage(BaseModel):
     completion_tokens: int = 0
     total_tokens: int = 0
 
-    def __add__(self, other: "Usage") -> "Usage":
+    def __add__(self, other: Usage) -> Usage:
         return Usage(
             prompt_tokens=self.prompt_tokens + other.prompt_tokens,
             completion_tokens=self.completion_tokens + other.completion_tokens,

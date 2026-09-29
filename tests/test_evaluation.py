@@ -69,7 +69,7 @@ class EvalQueueProvider(ModelProvider):
 
 
 class RaisingProvider(ModelProvider):
-    async def chat(self, request: ProviderRequest) -> CandidateResult:  # noqa: ARG002
+    async def chat(self, request: ProviderRequest) -> CandidateResult:
         raise RuntimeError("provider exploded")
 
 

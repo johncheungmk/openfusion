@@ -27,7 +27,6 @@ from .metrics import wilson_interval
 from .providers import ModelProvider
 from .schema import ChatMessage, FusionResult
 
-
 LAB_RESULT_SCHEMA_VERSION = "openfusion-lab-result-v2"
 
 
@@ -339,11 +338,11 @@ class LabConfig(BaseModel):
     recommendation: LabRecommendationSettings = Field(default_factory=LabRecommendationSettings)
 
     @classmethod
-    def load(cls, path: str | Path = "lab.yaml") -> "LabConfig":
+    def load(cls, path: str | Path = "lab.yaml") -> LabConfig:
         return load_lab_config(path)
 
     @model_validator(mode="after")
-    def validate_references(self) -> "LabConfig":
+    def validate_references(self) -> LabConfig:
         engine_names = [engine.name for engine in self.engines]
         duplicate_engines = sorted(
             {name for name in engine_names if engine_names.count(name) > 1}
@@ -416,7 +415,7 @@ def load_lab_config(path: str | Path = "lab.yaml") -> LabConfig:
         raise FileNotFoundError(f"Lab config not found: {config_path}")
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError(f"Lab config must contain a YAML object: {config_path}")
+        raise TypeError(f"Lab config must contain a YAML object: {config_path}")
     return LabConfig.model_validate(raw)
 
 
@@ -509,7 +508,7 @@ def load_lab_dataset(path: str | Path, *, max_examples: int | None = None, seed:
         try:
             raw = json.loads(line)
             examples.append(_parse_lab_example(raw))
-        except Exception as exc:  # noqa: BLE001 - line context helps repair datasets
+        except Exception as exc:
             raise ValueError(f"Invalid lab JSONL at line {line_number}: {exc}") from exc
     if max_examples is not None and len(examples) > max_examples:
         rng = random.Random(seed)
@@ -884,7 +883,7 @@ def search_huggingface_models(
     response.raise_for_status()
     data = response.json()
     if not isinstance(data, list):
-        raise ValueError("Unexpected Hugging Face API response")
+        raise TypeError("Unexpected Hugging Face API response")
     return [
         {
             "modelId": item.get("modelId") or item.get("id"),
@@ -948,7 +947,7 @@ def build_engine_plan(config: LabConfig) -> str:
 
 def _parse_lab_example(raw: dict[str, Any]) -> LabExample:
     if not isinstance(raw, dict):
-        raise ValueError("example must be a JSON object")
+        raise TypeError("example must be a JSON object")
     example_id = str(raw.get("id") or "").strip()
     if not example_id:
         raise ValueError("example id is required")
@@ -960,7 +959,7 @@ def _parse_lab_example(raw: dict[str, Any]) -> LabExample:
         messages = [ChatMessage(role="user", content=raw["prompt"])]
         reference = raw.get("reference", raw.get("answer"))
     else:
-        raise ValueError("example must include messages or prompt")
+        raise TypeError("example must include messages or prompt")
 
     references = reference if isinstance(reference, list) else [reference]
     rendered_references = [str(item) for item in references if item is not None and str(item)]
@@ -1504,7 +1503,7 @@ def _relative_accuracy_percent(
     return ((metrics.accuracy - baseline.accuracy) / baseline.accuracy) * 100
 
 
-def _safe_ratio(numerator: float | int | None, denominator: float | int | None) -> float | None:
+def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator is None or denominator == 0:
         return None
     return numerator / denominator
@@ -1604,7 +1603,7 @@ def _percentile(values: list[int], percentile: int) -> float:
     sorted_values = sorted(values)
     if percentile == 50:
         return float(statistics.median(sorted_values))
-    index = int(round((percentile / 100) * (len(sorted_values) - 1)))
+    index = round((percentile / 100) * (len(sorted_values) - 1))
     return float(sorted_values[max(0, min(index, len(sorted_values) - 1))])
 
 

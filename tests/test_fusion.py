@@ -14,7 +14,7 @@ class FailingProvider(ModelProvider):
         self.error = error
         self.content = content
 
-    async def chat(self, request: ProviderRequest) -> CandidateResult:  # noqa: ARG002
+    async def chat(self, request: ProviderRequest) -> CandidateResult:
         return CandidateResult(
             provider=self.config.name,
             model=self.config.model,

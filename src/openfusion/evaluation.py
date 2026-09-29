@@ -15,7 +15,6 @@ from .fusion import FusionEngine
 from .metrics import wilson_interval
 from .schema import ChatMessage, FusionResult, Usage
 
-
 GraderMode = Literal[
     "exact_match",
     "regex",
@@ -197,7 +196,7 @@ def load_jsonl(path: str | Path) -> list[EvalCase]:
         try:
             raw = json.loads(line)
             cases.append(EvalCase.model_validate(raw))
-        except Exception as exc:  # noqa: BLE001 - include line number for dataset repair
+        except Exception as exc:
             raise ValueError(f"Invalid evaluation JSONL at line {line_number}: {exc}") from exc
     return cases
 
@@ -826,7 +825,7 @@ def _percentile(values: list[int], percentile: int) -> float:
     sorted_values = sorted(values)
     if percentile == 50:
         return float(statistics.median(sorted_values))
-    index = int(round((percentile / 100) * (len(sorted_values) - 1)))
+    index = round((percentile / 100) * (len(sorted_values) - 1))
     return float(sorted_values[max(0, min(index, len(sorted_values) - 1))])
 
 

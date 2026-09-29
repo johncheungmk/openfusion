@@ -216,7 +216,7 @@ class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
 
     @model_validator(mode="after")
-    def validate_provider_references(self) -> "AppConfig":
+    def validate_provider_references(self) -> AppConfig:
         provider_names = [provider.name for provider in self.providers]
         duplicate_names = sorted(
             {name for name in provider_names if provider_names.count(name) > 1}
@@ -283,7 +283,7 @@ def load_config(path: str | Path) -> AppConfig:
     load_dotenv(config_path.with_name(".env"))
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError(f"Config file must contain a YAML object: {config_path}")
+        raise TypeError(f"Config file must contain a YAML object: {config_path}")
     return AppConfig.model_validate(raw)
 
 

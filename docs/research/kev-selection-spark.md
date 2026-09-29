@@ -2,6 +2,9 @@
 
 Measured on 2026-09-29. Code, decisions, and fresh-task results are published together.
 
+The [method and model follow-up](moa-method-model-ablation.md) compares model diversity
+with repeated sampling at the same proposal budget on a fresh HumanEval subset.
+
 ## Findings
 
 **Verifier-assisted MoA improved coding results on the fresh sample: 51/60, compared with

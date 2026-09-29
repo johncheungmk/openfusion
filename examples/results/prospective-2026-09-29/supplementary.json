@@ -1,0 +1,155 @@
+{
+  "seed": {
+    "17429": {
+      "single": {
+        "runs": 500,
+        "tasks": 500,
+        "correct": 345,
+        "mean_seconds": 2.2138431259361098
+      },
+      "qwen_repair": {
+        "runs": 500,
+        "tasks": 500,
+        "correct": 366,
+        "mean_seconds": 4.345609777587466
+      },
+      "moa": {
+        "runs": 500,
+        "tasks": 500,
+        "correct": 389,
+        "mean_seconds": 3.4666929440316743
+      }
+    },
+    "58103": {
+      "single": {
+        "runs": 500,
+        "tasks": 500,
+        "correct": 345,
+        "mean_seconds": 2.21071556140203
+      },
+      "qwen_repair": {
+        "runs": 500,
+        "tasks": 500,
+        "correct": 359,
+        "mean_seconds": 4.139841770491097
+      },
+      "moa": {
+        "runs": 500,
+        "tasks": 500,
+        "correct": 392,
+        "mean_seconds": 3.555106448178645
+      }
+    }
+  },
+  "sanitized": {
+    "False": {
+      "single": {
+        "runs": 690,
+        "tasks": 345,
+        "correct": 448,
+        "mean_seconds": 2.498310635080966
+      },
+      "qwen_repair": {
+        "runs": 690,
+        "tasks": 345,
+        "correct": 474,
+        "mean_seconds": 4.856166798949741
+      },
+      "moa": {
+        "runs": 690,
+        "tasks": 345,
+        "correct": 509,
+        "mean_seconds": 3.90229572624481
+      }
+    },
+    "True": {
+      "single": {
+        "runs": 310,
+        "tasks": 155,
+        "correct": 242,
+        "mean_seconds": 1.5756290498813013
+      },
+      "qwen_repair": {
+        "runs": 310,
+        "tasks": 155,
+        "correct": 251,
+        "mean_seconds": 2.877324783109549
+      },
+      "moa": {
+        "runs": 310,
+        "tasks": 155,
+        "correct": 272,
+        "mean_seconds": 2.6397278870846477
+      }
+    }
+  },
+  "official_split": {
+    "test": {
+      "single": {
+        "runs": 394,
+        "tasks": 197,
+        "correct": 249,
+        "mean_seconds": 2.825742583192984
+      },
+      "qwen_repair": {
+        "runs": 394,
+        "tasks": 197,
+        "correct": 267,
+        "mean_seconds": 5.41896215896654
+      },
+      "moa": {
+        "runs": 394,
+        "tasks": 197,
+        "correct": 285,
+        "mean_seconds": 4.452674930930601
+      }
+    },
+    "train": {
+      "single": {
+        "runs": 476,
+        "tasks": 238,
+        "correct": 355,
+        "mean_seconds": 1.7484440216183186
+      },
+      "qwen_repair": {
+        "runs": 476,
+        "tasks": 238,
+        "correct": 366,
+        "mean_seconds": 3.555701171626149
+      },
+      "moa": {
+        "runs": 476,
+        "tasks": 238,
+        "correct": 396,
+        "mean_seconds": 2.840707418676603
+      }
+    },
+    "validation_or_prompt": {
+      "single": {
+        "runs": 130,
+        "tasks": 65,
+        "correct": 86,
+        "mean_seconds": 2.051364704620881
+      },
+      "qwen_repair": {
+        "runs": 130,
+        "tasks": 65,
+        "correct": 92,
+        "mean_seconds": 3.193391736249368
+      },
+      "moa": {
+        "runs": 130,
+        "tasks": 65,
+        "correct": 100,
+        "mean_seconds": 3.110531092526463
+      }
+    }
+  },
+  "interpretation": "Exploratory descriptive checks; no subgroup was selected as a deployment rule.",
+  "moa_selected_stage": {
+    "3": 134,
+    "0": 783,
+    "1": 30,
+    "2": 53
+  }
+}

@@ -1,0 +1,37 @@
+[
+  {
+    "path": "examples/results/prospective-2026-09-29/tasks-public.json",
+    "sha256": "7683b2bd815b3271346205c7ea42502fc7c5ee5a214d1e1b1175c60ed8a7ce2f",
+    "matches": true
+  },
+  {
+    "path": "examples/results/prospective-2026-09-29/tasks-grading.json",
+    "sha256": "bd7db7cb11308c6758a1aba472e6daa4dae8059f334fa223d8801e2683b96762",
+    "matches": true
+  },
+  {
+    "path": "examples/results/prospective-2026-09-29/exclusions.json",
+    "sha256": "ca6f735d0937fb4a872faba1e8af46b4749bd230fc4cb9462630ac9cf234e654",
+    "matches": true
+  },
+  {
+    "path": "examples/results/prospective-2026-09-29/models.json",
+    "sha256": "9559d88ad56a243d3e79182f5116ed722de3010867ce9c32b051cf0852188d3c",
+    "matches": true
+  },
+  {
+    "path": "examples/prospective_moa.py",
+    "sha256": "d8325a75db0babbb90495b81c52ef28901e271aef537b307c59d9370a23fd53b",
+    "matches": true
+  },
+  {
+    "path": "examples/prospective_analysis.py",
+    "sha256": "80ee6ae4b00433fd10983e55685edee6a590f7ac0f18428d9a658b78b1cdb1f9",
+    "matches": true
+  },
+  {
+    "path": "tests/test_prospective_moa.py",
+    "sha256": "58ceae0cdcc82a01cd350099675e4797538314905aae9683fd58eb118d13ddf3",
+    "matches": true
+  }
+]

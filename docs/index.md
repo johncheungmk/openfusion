@@ -11,6 +11,10 @@ resulting latency, token, and cost trade-offs.
 
 ## What OpenFusion does
 
+Read the [prospective MoA deployment study](research/prospective-moa-deployment.md)
+for a fixed workflow tested on 500 previously unused programming tasks, its registered
+comparison against Qwen repair, and the resulting deployment recommendation.
+
 - Runs single-model and multi-model strategies.
 - Supports local Kev decision models for candidate selection through the System One API.
 - Supports Self-MoA, semantic voting, parallel synthesis, pairwise rank fusion, and uncertainty cascades.

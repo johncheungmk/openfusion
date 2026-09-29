@@ -1,0 +1,27 @@
+{
+  "phase": "during confirmation, before hidden grading",
+  "source": "read-only host DMI, uname, nvidia-smi and filesystem inspection",
+  "node_a": {
+    "role": "Qwen small model and one rank of existing larger model",
+    "vendor": "Dell Inc.",
+    "product": "Dell Pro Max with GB10 FCM1253",
+    "gpu": "NVIDIA GB10",
+    "architecture": "aarch64",
+    "kernel": "6.11.0-1016-nvidia",
+    "driver": "580.95.05",
+    "observed_gpu_utilization_percent": 92,
+    "observed_gpu_power_watts": 40.19
+  },
+  "node_b": {
+    "role": "Phi and Gemma small models, isolated evaluator, and one rank of existing larger model",
+    "vendor": "Dell Inc.",
+    "product": "Dell Pro Max with GB10 FCM1253",
+    "gpu": "NVIDIA GB10",
+    "architecture": "aarch64",
+    "kernel": "6.17.0-1014-nvidia",
+    "driver": "580.142",
+    "observed_gpu_utilization_percent": 0,
+    "observed_gpu_power_watts": 11.42
+  },
+  "interpretation": "Instantaneous power/utilization observations are not mean power or energy measurements. The two hosts have different serving software versions. No hardware, driver, or existing serving process was changed."
+}

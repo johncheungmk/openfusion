@@ -1,0 +1,24 @@
+{
+  "qwen": {
+    "model": "of-qwen3-4b",
+    "digest": "9c66327caccbe43326695b815416d55cc9958f1e9805b6d00fb844d0d2ae5340",
+    "matches_registered_digest": true,
+    "service_healthy": true
+  },
+  "phi": {
+    "model": "of-phi4-mini",
+    "digest": "48d9a121d662c4514449d2cbaef02528cf4c07639a705bd002a9905b5f57cc5c",
+    "matches_registered_digest": true,
+    "service_healthy": true
+  },
+  "gemma": {
+    "model": "of-gemma3-4b",
+    "digest": "bb3fa28da046422b7223ce7ec8527e4f9fc35b147ce7878918a12ca07f6f1fae",
+    "matches_registered_digest": true,
+    "service_healthy": true
+  },
+  "stronger": {
+    "service_healthy": true,
+    "registered_alias_available": true
+  }
+}

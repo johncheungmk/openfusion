@@ -1,0 +1,274 @@
+[
+  {
+    "id": "MBPP-594",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef diff_even_odd(list1):\n    first_even = None\n    first_odd = None\n    for num in list1:\n        if num % 2 == 0 and first_even is None:\n            first_even = num\n        elif num % 2 != 0 and first_odd is None:\n            first_odd = num\n        if first_even is not None and first_odd is not None:\n            break\n    return first_even - first_odd\n```",
+        "output_tokens": 103,
+        "input_tokens": 116,
+        "finish": "stop",
+        "elapsed": 1.8039160170592368,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.1847125869244337
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 1.988852638984099,
+    "created_utc": "2026-09-29T07:06:12.277975+00:00"
+  },
+  {
+    "id": "MBPP-595",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef min_Swaps(str1, str2):\n    \"\"\"\n    Count minimum number of swaps required to convert one binary string to another.\n    \n    A swap means swapping two characters in str1 to make it equal to str2.\n    We only count positions where str1 and str2 differ.\n    For each mismatch, if str1 has '1' and str2 has '0', that's a \"1->0\" mismatch.\n    If str1 has '0' and str2 has '1', that's a \"0->1\" mismatch.\n    Each swap can fix one \"1->0\" and one \"0->1\" mismatch simultaneously.\n    So the minimum number of swaps is the number of \"1->0\" mismatches (which equals the number of \"0->1\" mismatches).\n    \"\"\"\n    if len(str1) != len(str2):\n        return -1\n    \n    count_1_to_0 = 0  # positions where str1 has '1' and str2 has '0'\n    count_0_to_1 = 0  # positions where str1 has '0' and str2 has '1'\n    \n    for c1, c2 in zip(str1, str2):\n        if c1 != c2:\n            if c1 == '1' and c2 == '0':\n                count_1_to_0 += 1\n            elif c1 == '0' and c2 == '1':\n                count_0_to_1 += 1\n    \n    # Each swap fixes one 1->0 and one 0->1 mismatch\n    # So the number of swaps needed is the count of either type (they should be equal)\n    if count_1_to_0 != count_0_to_1:\n        return -1  # Not possible to convert\n    \n    return count_1_to_0\n```",
+        "output_tokens": 413,
+        "input_tokens": 120,
+        "finish": "stop",
+        "elapsed": 6.838165055960417,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.1937151679303497
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 7.03194020781666,
+    "created_utc": "2026-09-29T07:06:19.310185+00:00"
+  },
+  {
+    "id": "MBPP-554",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef Split(list):\n    return [x for x in list if x % 2 != 0]\n```",
+        "output_tokens": 28,
+        "input_tokens": 111,
+        "finish": "stop",
+        "elapsed": 0.6203886230941862,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.1899166649673134
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 0.8103538639843464,
+    "created_utc": "2026-09-29T07:06:20.121023+00:00"
+  },
+  {
+    "id": "MBPP-599",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef sum_average(number):\n    total = number * (number + 1) // 2\n    average = total / number\n    return (total, average)\n```",
+        "output_tokens": 41,
+        "input_tokens": 102,
+        "finish": "stop",
+        "elapsed": 1.1006276072002947,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.19095123396255076
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 1.2916417529340833,
+    "created_utc": "2026-09-29T07:06:21.413180+00:00"
+  },
+  {
+    "id": "MBPP-559",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef max_sub_array_sum(a, size):\n    if size == 0:\n        return 0\n    \n    max_ending_here = a[0]\n    max_so_far = a[0]\n    \n    for i in range(1, size):\n        max_ending_here = max(a[i], max_ending_here + a[i])\n        max_so_far = max(max_so_far, max_ending_here)\n    \n    return max_so_far\n```",
+        "output_tokens": 103,
+        "input_tokens": 128,
+        "finish": "stop",
+        "elapsed": 2.640442942036316,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.23679963080212474
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 2.87730740592815,
+    "created_utc": "2026-09-29T07:06:24.291044+00:00"
+  },
+  {
+    "id": "MBPP-586",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef split_Arr(l, n):\n    return l[n:] + l[:n]\n```",
+        "output_tokens": 25,
+        "input_tokens": 139,
+        "finish": "stop",
+        "elapsed": 0.9759118088986725,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.1884213809389621
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 1.1643839259631932,
+    "created_utc": "2026-09-29T07:06:25.456017+00:00"
+  },
+  {
+    "id": "MBPP-579",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef find_dissimilar(test_tup1, test_tup2):\n    set1 = set(test_tup1)\n    set2 = set(test_tup2)\n    dissimilar = set1.symmetric_difference(set2)\n    return tuple(sorted(dissimilar))\n```",
+        "output_tokens": 64,
+        "input_tokens": 141,
+        "finish": "stop",
+        "elapsed": 1.9196137068793178,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.18289871490560472
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 2.102550790179521,
+    "created_utc": "2026-09-29T07:06:27.558961+00:00"
+  },
+  {
+    "id": "MBPP-555",
+    "arm": "stronger",
+    "seed": 17429,
+    "selected": 0,
+    "calls": [
+      {
+        "text": "```python\ndef difference(n):\n    sum_of_cubes = (n * (n + 1) // 2) ** 2\n    sum_of_naturals = n * (n + 1) // 2\n    return sum_of_cubes - sum_of_naturals\n```",
+        "output_tokens": 65,
+        "input_tokens": 109,
+        "finish": "stop",
+        "elapsed": 1.8608622290194035,
+        "model": "qwen3.8-flash-next",
+        "temperature": 0,
+        "seed": 17429,
+        "max_output_tokens": 8192,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "visible": {
+          "results": [
+            {
+              "pass": true
+            }
+          ],
+          "pass": true,
+          "elapsed": 0.17659591301344335
+        },
+        "tag": "stronger"
+      }
+    ],
+    "elapsed": 2.03749603102915,
+    "created_utc": "2026-09-29T07:06:29.596850+00:00"
+  }
+]

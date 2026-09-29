@@ -1,0 +1,67 @@
+{
+  "created_utc": "2026-09-29T07:07:41.398884+00:00",
+  "status": "frozen before confirmation generation",
+  "base_repository_commit": "e85540008a43e060839892d16c462a069faf3db6",
+  "target_workload": "Short Python 3.12 standard-library function implementations with a supplied executable acceptance example and known function interfaces. Public MBPP tasks unused by this project; not evidence of unseen model training data.",
+  "data": {
+    "source": "https://github.com/google-research/google-research/tree/master/mbpp",
+    "source_sha256": "ccf64ceae9c5403bf50a044cb6d505bfd2a2963ee58338ba268fd65beab92a9f",
+    "sampling": "All original MBPP splits pooled; hand-verified wording, code and tests preferred when available. Remove known prior IDs, exact normalized prior prompts, exact reference AST duplicates and duplicate candidate prompts; require >=3 tests and reference passing all tests in sandbox. Shuffle seed 30092026, first 500 eligible tasks.",
+    "n_tasks": 500,
+    "generation_seeds": [
+      17429,
+      58103
+    ],
+    "task_order_seed": 29092026,
+    "stronger_subset": "First 40 selected tasks, first seed only; descriptive comparison.",
+    "grading": "All published regular tests, first visible plus remaining hidden. Challenge tests unused. No new test generation. Not the official MBPP test-split score.",
+    "reference_use": "Eligibility and function signatures only. No reference body in inference or repair."
+  },
+  "primary": {
+    "comparison": "moa versus qwen_repair",
+    "metric": "Paired difference in all-tests-pass rate, average across two seeds within each task, then equal average across 500 tasks.",
+    "minimum_practical_difference": 0.05,
+    "deployment_gate": "95% task bootstrap lower bound >0, task sign-flip p<.05, observed difference >=.05, mean end-to-end latency ratio <=1.5, mean total-token ratio <=1.5. Positive precision plus a point-estimate utility threshold does not prove the true gain exceeds 5 points.",
+    "threshold_rationale": "An explicit provisional engineering requirement: at least five additional successful tasks per 100 for at most 50% more average latency and measured token volume relative to repair. These are not elicited business requirements or equal-dollar claims.",
+    "power": "For independent tasks with paired discordance .15 and true net difference .05, worst-case perfectly correlated seeds give normal-approximation power ~.83 at two-sided alpha .05 with n=500; minimum detectable difference about .0485 at 80% power. At discordance .20 power is about .71. Power is conditional, not guaranteed; two seeds are not 1000 independent tasks.",
+    "analysis": "10000 percentile task-cluster bootstrap resamples, seed 143092026; 100000 two-sided sign flips of whole-task differences with plus-one correction. Also bootstrap latency/token ratios. No interim accuracy analysis or optional stopping."
+  },
+  "policies": {
+    "single": "One Qwen answer, temperature 0.",
+    "qwen_repair": "Qwen initial temperature 0; up to three Qwen repairs at .7, each using only last answer and its visible-test feedback. Stop on first visible pass; otherwise return last repair.",
+    "moa": "Qwen initial temperature 0; on failure independent Phi .7 then independent Gemma .7; on continued failure one Qwen repair .7 using initial Qwen answer and its visible-test feedback. Stop on first visible pass; otherwise return final repair.",
+    "stronger": "One existing Qwen3.8-Flash-Next endpoint answer, temperature 0, 8192 output tokens, chat_template_kwargs enable_thinking=false, no accuracy-driven retry. Secondary 40-task comparison. This setting eliminated truncation on the eight development tasks before freezing."
+  },
+  "development_selection": "Existing MBPP evidence favored verified diverse candidates over Qwen repair, while fresh HumanEval gains were small. Qwen is the strongest supported starting model across the prior coding studies. Phi precedes Gemma because prior deterministic orders tied and Phi uses fewer output tokens. Repair is retained as the established strong four-call single-model control. Current eight previously used development tasks check compatibility/length/runtime, not select a new winning policy.",
+  "generation": {
+    "context": 8192,
+    "small_output_tokens": 2048,
+    "stronger_output_tokens": 8192,
+    "small_max_calls": 4,
+    "small_max_generated_tokens": 8192,
+    "seed_rule": "base seed plus zero-based call index",
+    "sampling_defaults": "Remaining sampling parameters and prompt templates remain pinned model defaults; see models.json.",
+    "request_timeout_seconds": 240,
+    "transport_retries": 0,
+    "truncation": "Retain and score returned code without length-triggered retries; report truncations.",
+    "infrastructure_failure": "Fail-stop and preserve completed records; no silent reruns or exclusions. Any recovery must be documented with failed work and costs. A material algorithm change invalidates confirmation and requires untouched tasks."
+  },
+  "runtime": {
+    "execution": "Fresh unprivileged Docker container per candidate check, no network/mounts/GPU, read-only root, 256 MiB, 1 CPU, 32 PIDs, tmpfs 16 MiB, wall timeout 8s. Python 3.12 standard library.",
+    "image": "python@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f",
+    "measurement": "Each policy executed independently, sequentially, with randomized job order. End-to-end policy clock includes generation, loading, transport and visible verification. Hidden grading excluded. Report prompt/output tokens, calls, Ollama prefill/generation/load durations, p50/p95 latency. Two Sparks share an existing resident SGLang deployment; these are laboratory measurements, not guaranteed service-level performance or energy estimates.",
+    "state": "Models may be loaded on demand; keep_alive 60m. No per-policy warmup or outcome-dependent exclusions; startup costs retained."
+  },
+  "secondary": "Single versus each workflow and stronger-model subset are descriptive. Report seed-specific and sanitized/official-split summaries only as exploratory; no best-subgroup deployment claims.",
+  "artifacts": {
+    "tasks-public.json": "7683b2bd815b3271346205c7ea42502fc7c5ee5a214d1e1b1175c60ed8a7ce2f",
+    "tasks-grading.json": "bd7db7cb11308c6758a1aba472e6daa4dae8059f334fa223d8801e2683b96762",
+    "exclusions.json": "ca6f735d0937fb4a872faba1e8af46b4749bd230fc4cb9462630ac9cf234e654",
+    "models.json": "9559d88ad56a243d3e79182f5116ed722de3010867ce9c32b051cf0852188d3c"
+  },
+  "code_sha256": {
+    "examples/prospective_moa.py": "d8325a75db0babbb90495b81c52ef28901e271aef537b307c59d9370a23fd53b",
+    "examples/prospective_analysis.py": "80ee6ae4b00433fd10983e55685edee6a590f7ac0f18428d9a658b78b1cdb1f9",
+    "tests/test_prospective_moa.py": "58ceae0cdcc82a01cd350099675e4797538314905aae9683fd58eb118d13ddf3"
+  }
+}

@@ -12,6 +12,7 @@ resulting latency, token, and cost trade-offs.
 ## What OpenFusion does
 
 - Runs single-model and multi-model strategies.
+- Supports local Kev decision models for candidate selection through the System One API.
 - Supports Self-MoA, semantic voting, parallel synthesis, pairwise rank fusion, and uncertainty cascades.
 - Compares fusion strategies against fallback when configured and every direct model; its built-in
   "best single" is the best observed on that run's evaluated split.

@@ -20,6 +20,7 @@ from .schema import FusionResult, OpenAIChatCompletionRequest, OpenAIModel
 logger = logging.getLogger(__name__)
 
 STRATEGY_MODEL_IDS = (
+    "openfusion/decision-select",
     "openfusion/adaptive",
     "openfusion/parallel-synthesis",
     "openfusion/panel-judge",  # backward-compatible alias

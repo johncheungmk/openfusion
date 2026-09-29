@@ -31,6 +31,7 @@ The documentation includes:
 
 - OpenAI-compatible `/v1/chat/completions` API server
 - Local and cloud provider support
+- [Kev decision-model selection](docs/strategies/decision-select.md) through the System One API
 - Order-balanced LLM judging with explicit abstention and position-consistency telemetry
 - Wilson confidence intervals, end-to-end latency, and optional token-price cost accounting
 - Lab panel-complementarity reports with oracle and all-model co-failure diagnostics

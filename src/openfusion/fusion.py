@@ -11,6 +11,7 @@ from itertools import combinations, islice
 from typing import Any
 
 from .config import AppConfig
+from .decisions import DecisionClient
 from .providers import ModelProvider, ProviderClientPool, make_provider
 from .schema import (
     CandidateResult,
@@ -100,6 +101,7 @@ Do not expose hidden chain-of-thought or private reasoning.
 """
 
 SUPPORTED_STRATEGIES = (
+    "decision_select",
     "fallback",
     "parallel_synthesis",
     "self_moa",
@@ -619,6 +621,11 @@ class FusionEngine:
                 budget,
                 trace,
             )
+        if strategy == "decision_select":
+            return await self._decision_select(
+                messages, panel, temperature, max_tokens, extra_body,
+                samples_per_provider, budget, trace,
+            )
         if strategy in {"majority_vote", "weighted_vote"}:
             return await self._vote(
                 strategy,
@@ -895,6 +902,82 @@ class FusionEngine:
             judge_analysis=f"Synthesis failed: {judge_result.error or 'empty response'}",
             candidates=self._visible_candidates(candidates),
             usage=usage,
+        )
+
+    async def _decision_select(
+        self,
+        messages: list[ChatMessage],
+        panel: list[str],
+        temperature: float | None,
+        max_tokens: int | None,
+        extra_body: dict[str, Any] | None,
+        samples_per_provider: int,
+        budget: CallBudget,
+        trace: list[WorkflowStep],
+    ) -> FusionResult:
+        config = self.config.decision_model
+        if config is None:
+            raise ValueError("decision_select requires decision_model configuration")
+        # Leave a call for the selector when there is room for two proposals and selection.
+        original_limit = budget.limit
+        slots = max(0, min(255, budget.remaining - (budget.remaining >= 3)))
+        budget.limit = budget.used + slots
+        try:
+            candidates = await self._generate_candidates(
+                panel, self._provider_request(messages, temperature, max_tokens, extra_body),
+                samples_per_provider, budget, trace, stage="candidate",
+            )
+        finally:
+            budget.limit = original_limit
+        successes = self._successes(candidates)
+        if not successes:
+            return self._no_success_result("decision_select", candidates)
+        winner = successes[0]
+        usage = self._sum_usage(candidates)
+        note = "First usable candidate selected."
+        if len(successes) < 2 or not budget.reserve():
+            trace.append(WorkflowStep(
+                stage="decision_selection", status="skipped",
+                note="Selection needs two usable candidates and one remaining call.",
+            ))
+        else:
+            started = time.perf_counter()
+            step = WorkflowStep(
+                stage="decision_selection", provider="decision_model", model=config.model,
+                model_call=True,
+            )
+            try:
+                request = json.dumps(
+                    [message.model_dump(exclude_none=True) for message in messages],
+                    ensure_ascii=False,
+                )[:self.config.fusion.transcript_max_chars]
+                decision = await DecisionClient(config).select(
+                    request,
+                    [c.content[:self.config.fusion.judge_candidate_max_chars] for c in successes],
+                )
+                # System One output tokens describe serialized decisions, not generated prose.
+                step.prompt_tokens = decision.input_tokens
+                step.completion_tokens = decision.output_tokens
+                step.total_tokens = decision.input_tokens + decision.output_tokens
+                usage += Usage(
+                    prompt_tokens=step.prompt_tokens, completion_tokens=step.completion_tokens,
+                    total_tokens=step.total_tokens,
+                )
+                if decision.probability >= config.min_probability:
+                    winner = successes[decision.index]
+                    note = f"Decision model selected candidate {decision.index + 1}."
+                else:
+                    step.status = "fallback"
+                    note = "Decision probability below configured threshold; first candidate used."
+            except Exception:  # noqa: BLE001 - isolate decision-service failures; never leak secrets
+                step.status = "error"
+                note = "Decision service failed or returned an invalid response; first candidate used."
+            step.latency_ms = int((time.perf_counter() - started) * 1000)
+            step.note = note
+            trace.append(step)
+        return FusionResult(
+            strategy="decision_select", final=winner.content, judge_analysis=note,
+            candidates=self._visible_candidates(candidates), usage=usage,
         )
 
     async def _best_of_n(
@@ -2401,7 +2484,7 @@ class FusionEngine:
         if strategy == "uncertainty_cascade":
             steps = min(panel_size, self.config.fusion.cascade_max_steps)
             return steps * self.config.fusion.cascade_consistency_samples
-        if strategy in {"parallel_synthesis", "best_of_n"}:
+        if strategy in {"parallel_synthesis", "best_of_n", "decision_select"}:
             return drafts + 1
         if strategy in {"majority_vote", "weighted_vote"}:
             return drafts
@@ -2419,7 +2502,7 @@ class FusionEngine:
     ) -> int:
         panel_size = max(1, len(panel))
         minimum_total = 1
-        if strategy in {"best_of_n", "weighted_vote", "semantic_vote"}:
+        if strategy in {"best_of_n", "weighted_vote", "semantic_vote", "decision_select"}:
             minimum_total = 2
         elif strategy == "majority_vote":
             minimum_total = 3

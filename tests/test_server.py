@@ -40,6 +40,7 @@ def test_health_and_models() -> None:
     assert "openfusion/critique-revision" in model_ids
     assert "openfusion/adaptive" in model_ids
     assert "openfusion/fallback" in model_ids
+    assert "openfusion/decision-select" in model_ids
     assert "provider/local/qwen" in model_ids
 
 

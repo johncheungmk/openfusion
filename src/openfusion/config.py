@@ -208,12 +208,34 @@ class ServerConfig(BaseModel):
         return os.getenv(self.api_key_env) if self.api_key_env else None
 
 
+class DecisionModelConfig(BaseModel):
+    """Optional System One endpoint; separate from text-generating providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str = "http://localhost:8009/v1"
+    model: str = "kev-latest"
+    api_key_env: str | None = None
+    timeout_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
+    min_probability: float = Field(default=0, ge=0, le=1, allow_inf_nan=False)
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        value = ProviderConfig.trim_slash(value)
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("must be an absolute HTTP(S) URL")
+        return value
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     providers: list[ProviderConfig]
     fusion: FusionConfig = Field(default_factory=FusionConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
+    decision_model: DecisionModelConfig | None = None
 
     @model_validator(mode="after")
     def validate_provider_references(self) -> AppConfig:

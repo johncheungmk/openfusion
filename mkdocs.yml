@@ -65,6 +65,7 @@ nav:
       - Result Card: lab/result-card.md
       - Leaderboard Format: lab/leaderboard-format.md
   - Strategies:
+      - Decision Selection (Kev): strategies/decision-select.md
       - Fallback: strategies/fallback.md
       - Self-MoA: strategies/self-moa.md
       - Semantic Vote: strategies/semantic-vote.md
@@ -77,6 +78,7 @@ nav:
       - Dify Integration: deployment/dify-integration.md
       - LiteLLM Integration: deployment/litellm-integration.md
   - Research:
+      - Kev Selection on Spark: research/kev-selection-spark.md
       - Related Work: research/related-work.md
       - Benchmarking: research/benchmarks.md
       - Reporting Results: research/reporting-results.md

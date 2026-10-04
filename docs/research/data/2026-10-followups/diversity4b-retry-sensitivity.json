@@ -1,0 +1,36 @@
+{
+  "method": "Conservative bounds: allow every synthesis result in both earlier retried task-seed pairs to be either pass or fail; keep all other observed outcomes fixed. No counterfactual regeneration.",
+  "affected_pairs": [
+    [
+      "apps-test-2125",
+      202
+    ],
+    [
+      "apps-test-4087",
+      101
+    ]
+  ],
+  "bounds": [
+    {
+      "comparison": "qwen_QG minus qwen_QQ",
+      "lower": -0.014285714285714285,
+      "upper": 0.014285714285714285
+    },
+    {
+      "comparison": "qwen_QG minus qwen_GG",
+      "lower": 0.05,
+      "upper": 0.07857142857142857
+    },
+    {
+      "comparison": "gemma_QG minus gemma_QQ",
+      "lower": -0.15714285714285714,
+      "upper": -0.12857142857142856
+    },
+    {
+      "comparison": "gemma_QG minus gemma_GG",
+      "lower": 0.05,
+      "upper": 0.07857142857142857
+    }
+  ],
+  "caveat": "These are worst-case accuracy-difference bounds, not confidence intervals or a reconstruction of what failed original proposals would have caused."
+}

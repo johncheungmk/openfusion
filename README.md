@@ -10,6 +10,12 @@ OpenFusion helps users test whether fusion actually improves results by comparin
 strategies against fallback when configured and every direct model, while reporting accuracy uncertainty,
 latency, calls, tokens, optional complete-cost estimates, and improvement or regression.
 
+## Benchmark evidence
+
+The [complete evidence overview](docs/research/benchmark-evidence.md) includes positive test-guided results and the
+later negative diversity controls. Start with a strong single model and fresh same-model
+sampling; use a mixed workflow when a held-out comparison justifies it.
+
 ## Documentation
 
 The [prospective MoA deployment study](docs/research/prospective-moa-deployment.md)

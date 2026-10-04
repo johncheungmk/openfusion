@@ -1,0 +1,81 @@
+{
+  "tasks": 70,
+  "seeds": 2,
+  "accuracy": {
+    "qwen_direct": 0.3357142857142857,
+    "gemma_direct": 0.2357142857142857,
+    "qwen_QQ": 0.40714285714285714,
+    "qwen_QG": 0.40714285714285714,
+    "qwen_GG": 0.34285714285714286,
+    "gemma_QQ": 0.39285714285714285,
+    "gemma_QG": 0.24285714285714285,
+    "gemma_GG": 0.17142857142857143
+  },
+  "comparisons": [
+    {
+      "comparison": "qwen_QG minus qwen_QQ",
+      "difference": 0.0,
+      "ci95": [
+        -0.04285714285714286,
+        0.04285714285714286
+      ],
+      "p": 1.0,
+      "per_seed": {
+        "101": -0.014285714285714285,
+        "202": 0.014285714285714285
+      },
+      "holm_p": 1,
+      "passes": false
+    },
+    {
+      "comparison": "qwen_QG minus qwen_GG",
+      "difference": 0.06428571428571428,
+      "ci95": [
+        -0.007142857142857143,
+        0.1357142857142857
+      ],
+      "p": 0.13725862741372585,
+      "per_seed": {
+        "101": 0.02857142857142857,
+        "202": 0.1
+      },
+      "holm_p": 0.3995660043399566,
+      "passes": false
+    },
+    {
+      "comparison": "gemma_QG minus gemma_QQ",
+      "difference": -0.15,
+      "ci95": [
+        -0.22857142857142856,
+        -0.07142857142857142
+      ],
+      "p": 0.0006299937000629993,
+      "per_seed": {
+        "101": -0.1,
+        "202": -0.2
+      },
+      "holm_p": 0.0025199748002519974,
+      "passes": false
+    },
+    {
+      "comparison": "gemma_QG minus gemma_GG",
+      "difference": 0.07142857142857142,
+      "ci95": [
+        -0.007142857142857143,
+        0.15714285714285714
+      ],
+      "p": 0.13318866811331886,
+      "per_seed": {
+        "101": 0.08571428571428572,
+        "202": 0.05714285714285714
+      },
+      "holm_p": 0.3995660043399566,
+      "passes": false
+    }
+  ],
+  "diversity_supported_by_synthesizer": {
+    "qwen": false,
+    "gemma": false
+  },
+  "caveat": "Limited-precision fixed-policy coding study. No execution feedback; no discrete-GPU performance claim."
+}

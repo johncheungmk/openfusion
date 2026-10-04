@@ -1,5 +1,8 @@
 # Kev selection and verified MoA on NVIDIA Spark
 
+> Follow-up context (4 October 2026): see the [complete evidence overview](benchmark-evidence.md). Later controls do not establish a consistent advantage from model diversity over fresh same-model sampling. The original results below remain specific to their workload and comparator.
+
+
 Measured on 2026-09-29. Code, decisions, and fresh-task results are published together.
 
 The [method and model follow-up](moa-method-model-ablation.md) compares model diversity

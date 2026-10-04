@@ -1,0 +1,85 @@
+{
+  "accuracy_95ci": [
+    -0.06711409395973154,
+    0.040268456375838924
+  ],
+  "accuracy_difference": -0.013422818791946308,
+  "bootstrap_resamples": 10000,
+  "caveats": [
+    "Results concern this coding cohort without execution feedback; they do not establish universal real-world benefit.",
+    "Different model quality and diversity both change between arms; this does not causally isolate diversity.",
+    "Seeds share tasks and are robustness checks, not independent replications.",
+    "Failure to meet the success rule is not proof of equivalence or no practical use."
+  ],
+  "completed_utc": "2026-09-30T19:13:14.951989+00:00",
+  "gates": {
+    "confidence_interval_positive": false,
+    "difference_at_least_5pp": false,
+    "positive_difference_both_seeds": false,
+    "two_sided_p_below_05": false
+  },
+  "heterogeneous_accuracy": 0.5805369127516778,
+  "n_task_seed_pairs": 298,
+  "n_tasks": 149,
+  "per_seed_difference": {
+    "101": 0.006711409395973154,
+    "202": -0.03355704697986577
+  },
+  "qwen_only_accuracy": 0.5939597315436241,
+  "random_seed": 20260930,
+  "registration_id": "486f698c8654448c864c31750f13472bdf00bbdbcac9f1d3e2345eba44ff3cf0",
+  "resources": {
+    "generation_elapsed_seconds": 13245.124117657542,
+    "interpretation": "Calls are shared across arms and development strategies. These are physical run totals, not separate arm costs. Unknown usage is not zero usage.",
+    "known_input_tokens": 2887213,
+    "known_output_tokens": 861763,
+    "physical_calls": 3594,
+    "requests_with_unknown_usage": 2,
+    "usage_complete": false
+  },
+  "sign_flip_random_seed": 20260931,
+  "sign_flip_resamples": 100000,
+  "single_qwen_accuracy": 0.5637583892617449,
+  "strategy": "synthesis",
+  "success": false,
+  "two_sided_task_sign_flip_p": 0.7118228817711822,
+  "winner": {
+    "development_grading_sha256": "44724a8f231b4d10773a34490dc6d92388e28b0d2b5cb62b6b1fb1fe1ea448ee",
+    "frozen_utc": "2026-09-30T16:57:09.274138+00:00",
+    "n_tasks": 58,
+    "ranking": [
+      {
+        "accuracy_difference": -0.017241379310344827,
+        "heterogeneous_accuracy": 0.603448275862069,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.6206896551724138,
+        "single_qwen_accuracy": 0.6206896551724138,
+        "strategy": "synthesis"
+      },
+      {
+        "accuracy_difference": -0.017241379310344827,
+        "heterogeneous_accuracy": 0.5948275862068966,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.6120689655172413,
+        "single_qwen_accuracy": 0.6206896551724138,
+        "strategy": "critique_revision"
+      },
+      {
+        "accuracy_difference": -0.15517241379310345,
+        "heterogeneous_accuracy": 0.5,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.6551724137931034,
+        "single_qwen_accuracy": 0.6206896551724138,
+        "strategy": "selection"
+      }
+    ],
+    "registration_id": "486f698c8654448c864c31750f13472bdf00bbdbcac9f1d3e2345eba44ff3cf0",
+    "selection_rule": "Largest equal-task paired lift, then heterogeneous accuracy, then fewer logical calls, then fixed strategy order",
+    "strategy_order": [
+      "selection",
+      "synthesis",
+      "critique_revision"
+    ],
+    "winner": "synthesis"
+  }
+}

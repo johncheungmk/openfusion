@@ -1,0 +1,277 @@
+{
+  "analysis_status": "complete",
+  "task_clusters": 160,
+  "seeds": [
+    101,
+    202
+  ],
+  "arms": {
+    "strong_direct": {
+      "workflow_count": 320,
+      "solved_workflows": 202,
+      "accuracy": 0.63125,
+      "incorrect_workflows_including_failures": 118,
+      "total_workflow_wall_seconds_including_cleanup": 28894.38498442713,
+      "median_workflow_wall_seconds_including_cleanup": 69.34019775153138,
+      "p95_workflow_wall_seconds_including_cleanup": 176.28475233074278,
+      "wall_seconds_per_solved_workflow": 143.0415098238967,
+      "zero_solved_denominator": false,
+      "generation_status_counts": {
+        "generated": 320
+      },
+      "terminal_failure_reason_counts": {},
+      "generation_failure_count": 0,
+      "failure_status_unavailable_rows": 0,
+      "cost_interpretation": "Observed end-to-end workflow wall time; not GPU compute, energy, money, or discrete-GPU latency.",
+      "per_seed_accuracy": {
+        "101": 0.65625,
+        "202": 0.60625
+      }
+    },
+    "strong_repeat2_synthesis": {
+      "workflow_count": 320,
+      "solved_workflows": 228,
+      "accuracy": 0.7125,
+      "incorrect_workflows_including_failures": 92,
+      "total_workflow_wall_seconds_including_cleanup": 76982.31596511602,
+      "median_workflow_wall_seconds_including_cleanup": 196.06681049242616,
+      "p95_workflow_wall_seconds_including_cleanup": 518.7977511561243,
+      "wall_seconds_per_solved_workflow": 337.64173668910536,
+      "zero_solved_denominator": false,
+      "generation_status_counts": {
+        "generated": 320
+      },
+      "terminal_failure_reason_counts": {},
+      "generation_failure_count": 0,
+      "failure_status_unavailable_rows": 0,
+      "cost_interpretation": "Observed end-to-end workflow wall time; not GPU compute, energy, money, or discrete-GPU latency.",
+      "per_seed_accuracy": {
+        "101": 0.73125,
+        "202": 0.69375
+      }
+    },
+    "small_hetero2_synthesis": {
+      "workflow_count": 320,
+      "solved_workflows": 91,
+      "accuracy": 0.284375,
+      "incorrect_workflows_including_failures": 229,
+      "total_workflow_wall_seconds_including_cleanup": 11331.886302598286,
+      "median_workflow_wall_seconds_including_cleanup": 32.276665568118915,
+      "p95_workflow_wall_seconds_including_cleanup": 56.86146865112244,
+      "wall_seconds_per_solved_workflow": 124.52622310547568,
+      "zero_solved_denominator": false,
+      "generation_status_counts": {
+        "generated": 317,
+        "terminal_generation_failure": 3
+      },
+      "terminal_failure_reason_counts": {
+        "terminal_generation_failure": 3
+      },
+      "generation_failure_count": 3,
+      "failure_status_unavailable_rows": 0,
+      "cost_interpretation": "Observed end-to-end workflow wall time; not GPU compute, energy, money, or discrete-GPU latency.",
+      "per_seed_accuracy": {
+        "101": 0.30625,
+        "202": 0.2625
+      }
+    },
+    "small_repeat2_synthesis": {
+      "workflow_count": 320,
+      "solved_workflows": 106,
+      "accuracy": 0.33125,
+      "incorrect_workflows_including_failures": 214,
+      "total_workflow_wall_seconds_including_cleanup": 12610.726550911553,
+      "median_workflow_wall_seconds_including_cleanup": 37.76773000182584,
+      "p95_workflow_wall_seconds_including_cleanup": 76.41161779523829,
+      "wall_seconds_per_solved_workflow": 118.96911840482598,
+      "zero_solved_denominator": false,
+      "generation_status_counts": {
+        "generated": 308,
+        "terminal_generation_failure": 12
+      },
+      "terminal_failure_reason_counts": {
+        "terminal_generation_failure": 12
+      },
+      "generation_failure_count": 12,
+      "failure_status_unavailable_rows": 0,
+      "cost_interpretation": "Observed end-to-end workflow wall time; not GPU compute, energy, money, or discrete-GPU latency.",
+      "per_seed_accuracy": {
+        "101": 0.3125,
+        "202": 0.35
+      }
+    },
+    "small_hetero3_synthesis": {
+      "workflow_count": 320,
+      "solved_workflows": 105,
+      "accuracy": 0.328125,
+      "incorrect_workflows_including_failures": 215,
+      "total_workflow_wall_seconds_including_cleanup": 15946.530500298832,
+      "median_workflow_wall_seconds_including_cleanup": 46.69704851694405,
+      "p95_workflow_wall_seconds_including_cleanup": 90.98161445718725,
+      "wall_seconds_per_solved_workflow": 151.87171905046506,
+      "zero_solved_denominator": false,
+      "generation_status_counts": {
+        "generated": 318,
+        "terminal_generation_failure": 2
+      },
+      "terminal_failure_reason_counts": {
+        "terminal_generation_failure": 2
+      },
+      "generation_failure_count": 2,
+      "failure_status_unavailable_rows": 0,
+      "cost_interpretation": "Observed end-to-end workflow wall time; not GPU compute, energy, money, or discrete-GPU latency.",
+      "per_seed_accuracy": {
+        "101": 0.34375,
+        "202": 0.3125
+      }
+    },
+    "small_repeat3_synthesis": {
+      "workflow_count": 320,
+      "solved_workflows": 107,
+      "accuracy": 0.334375,
+      "incorrect_workflows_including_failures": 213,
+      "total_workflow_wall_seconds_including_cleanup": 16062.42449207278,
+      "median_workflow_wall_seconds_including_cleanup": 48.142072544200346,
+      "p95_workflow_wall_seconds_including_cleanup": 97.59198629399762,
+      "wall_seconds_per_solved_workflow": 150.11611674834373,
+      "zero_solved_denominator": false,
+      "generation_status_counts": {
+        "generated": 309,
+        "terminal_generation_failure": 11
+      },
+      "terminal_failure_reason_counts": {
+        "terminal_generation_failure": 11
+      },
+      "generation_failure_count": 11,
+      "failure_status_unavailable_rows": 0,
+      "cost_interpretation": "Observed end-to-end workflow wall time; not GPU compute, energy, money, or discrete-GPU latency.",
+      "per_seed_accuracy": {
+        "101": 0.3125,
+        "202": 0.35625
+      }
+    }
+  },
+  "primary_contrasts": [
+    {
+      "arm": "small_hetero2_synthesis",
+      "control": "strong_direct",
+      "task_count": 160,
+      "mean_paired_accuracy_lift": -0.346875,
+      "task_cluster_bootstrap_95percent_marginal_ci": [
+        -0.421875,
+        -0.271875
+      ],
+      "two_sided_task_sign_flip_p": 9.99990000099999e-06,
+      "per_seed_lift": {
+        "101": -0.35,
+        "202": -0.34375
+      },
+      "task_mean_difference_counts": {
+        "-1.0": 44,
+        "-0.5": 34,
+        "0.0": 73,
+        "0.5": 7,
+        "1.0": 2
+      },
+      "holm_adjusted_p_across_three": 2.999970000299997e-05,
+      "success_gates": {
+        "lift_at_least_5pp": false,
+        "marginal_ci_lower_above_zero": false,
+        "holm_adjusted_p_below_0_05": true,
+        "positive_lift_at_both_seeds": false
+      },
+      "success": false
+    },
+    {
+      "arm": "small_hetero2_synthesis",
+      "control": "strong_repeat2_synthesis",
+      "task_count": 160,
+      "mean_paired_accuracy_lift": -0.428125,
+      "task_cluster_bootstrap_95percent_marginal_ci": [
+        -0.509375,
+        -0.35
+      ],
+      "two_sided_task_sign_flip_p": 9.99990000099999e-06,
+      "per_seed_lift": {
+        "101": -0.425,
+        "202": -0.43125
+      },
+      "task_mean_difference_counts": {
+        "-1.0": 57,
+        "-0.5": 33,
+        "0.0": 62,
+        "0.5": 6,
+        "1.0": 2
+      },
+      "holm_adjusted_p_across_three": 2.999970000299997e-05,
+      "success_gates": {
+        "lift_at_least_5pp": false,
+        "marginal_ci_lower_above_zero": false,
+        "holm_adjusted_p_below_0_05": true,
+        "positive_lift_at_both_seeds": false
+      },
+      "success": false
+    },
+    {
+      "arm": "small_hetero2_synthesis",
+      "control": "small_repeat2_synthesis",
+      "task_count": 160,
+      "mean_paired_accuracy_lift": -0.046875,
+      "task_cluster_bootstrap_95percent_marginal_ci": [
+        -0.0875,
+        -0.009375
+      ],
+      "two_sided_task_sign_flip_p": 0.035379646203537965,
+      "per_seed_lift": {
+        "101": -0.00625,
+        "202": -0.0875
+      },
+      "task_mean_difference_counts": {
+        "-1.0": 5,
+        "-0.5": 14,
+        "0.0": 133,
+        "0.5": 7,
+        "1.0": 1
+      },
+      "holm_adjusted_p_across_three": 0.035379646203537965,
+      "success_gates": {
+        "lift_at_least_5pp": false,
+        "marginal_ci_lower_above_zero": false,
+        "holm_adjusted_p_below_0_05": true,
+        "positive_lift_at_both_seeds": false
+      },
+      "success": false
+    }
+  ],
+  "all_three_primary_contrasts_successful": false,
+  "secondary": "Other arm results are descriptive; no secondary hypothesis tests or unadjusted confirmatory claims.",
+  "resampling": {
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 246024,
+    "sign_flip_replicates": 100000,
+    "sign_flip_seed": 246025,
+    "rng": "Python random.Random MT19937; reset frozen seed per contrast",
+    "bootstrap_unit": "task index with both seeds retained",
+    "percentile_rule": "linear interpolation at (replicates-1)*quantile",
+    "p_value_rule": "(1+null |sum| >= observed |sum|)/(100000+1); zero observed sum gives1"
+  },
+  "caveats": [
+    "Bootstrap intervals are marginal95percent, not simultaneous intervals across contrasts.",
+    "Holm controls the three registered primary p-values; remaining arms are descriptive.",
+    "Sign-flip calibration relies on paired exchangeability/symmetry under the null.",
+    "Two seeds remain clustered within160tasks; they are not320independent tasks.",
+    "A nonsignificant result does not establish equivalence or no practical use; power for small gains is limited.",
+    "Estimated lift>=5pp plus lower CI>0 does not establish that true lift exceeds5pp.",
+    "All terminal/deadline/resource/context failures remain incorrect in the denominator; missing status metadata is explicitly unavailable.",
+    "Equal600second allowances do not imply equal realized compute. Walltime includes recorded cleanup and failed work.",
+    "This is a frozen coding-policy comparison, not pure causal isolation of diversity or universal real-world generalization.",
+    "Spark unified-memory telemetry is a24GBallocation proxy, not certified isolated discreteVRAM use.",
+    "Failure token counts may be unknown; no monetary/token-efficiency claims are inferred from walltime."
+  ],
+  "provenance": {
+    "protocol_sha256": "a33b0346f1cbd30871a4d7cf299eab7c9bb055ac30f0e0416d2c6cedf28a57fc",
+    "grading_sha256": "4769d9e0592684bf9b107b1f1129d840b66dbe8f6036efbbcb09a5199934bf04",
+    "analysis_code_sha256": "e57421fc4885a253648c1d93d53bd06947fb77681ba02ae88a39447233fbbcf3",
+    "new_model_selection": false
+  }
+}

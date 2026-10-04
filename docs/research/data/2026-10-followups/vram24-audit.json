@@ -1,0 +1,81 @@
+{
+  "audit_pass": true,
+  "rows": 1920,
+  "attempts": 5760,
+  "generation_statuses": {
+    "generated": 1892,
+    "terminal_generation_failure": 28
+  },
+  "call_statuses": {
+    "generated": 5421,
+    "terminal_generation_failure": 339
+  },
+  "evaluation_statuses": {
+    "completed": 1892,
+    "generation_ineligible": 28
+  },
+  "test_statuses": {
+    "resource_or_process_failure": 1557,
+    "compared": 11340,
+    "timeout": 803
+  },
+  "exit_codes": {
+    "1": 1435,
+    "0": 11340,
+    "137": 122
+  },
+  "by_arm": {
+    "small_repeat2_synthesis": {
+      "n": 320,
+      "correct": 106,
+      "cuda_delta_peak_bytes": 14205165568,
+      "reported_resident_peak_bytes": 8363033231
+    },
+    "strong_repeat2_synthesis": {
+      "n": 320,
+      "correct": 228,
+      "cuda_delta_peak_bytes": 22057324544,
+      "reported_resident_peak_bytes": 17601470135
+    },
+    "strong_direct": {
+      "n": 320,
+      "correct": 202,
+      "cuda_delta_peak_bytes": 21033889792,
+      "reported_resident_peak_bytes": 17601470135
+    },
+    "small_hetero3_synthesis": {
+      "n": 320,
+      "correct": 105,
+      "cuda_delta_peak_bytes": 13727760384,
+      "reported_resident_peak_bytes": 8363033231
+    },
+    "small_hetero2_synthesis": {
+      "n": 320,
+      "correct": 91,
+      "cuda_delta_peak_bytes": 13674053632,
+      "reported_resident_peak_bytes": 8363033231
+    },
+    "small_repeat3_synthesis": {
+      "n": 320,
+      "correct": 107,
+      "cuda_delta_peak_bytes": 15030738944,
+      "reported_resident_peak_bytes": 8363033231
+    }
+  },
+  "memory_reports": 1920,
+  "cuda_global_delta_peak_bytes": 22057324544,
+  "reported_resident_peak_bytes": 17601470135,
+  "system_swap_delta_peak_bytes": 10403840,
+  "max_elapsed_seconds": 524.0438682157546,
+  "context_records": 5760,
+  "max_input_tokens_including_margin": 5788,
+  "grading_sha256": "4769d9e0592684bf9b107b1f1129d840b66dbe8f6036efbbcb09a5199934bf04",
+  "limitations": "Device-global CUDA deltas and reported resident allocation are feasibility proxies, not certified isolated VRAM. Generic process failures do not identify memory exhaustion. No inference or candidate execution during audit.",
+  "swap_audit": {
+    "reports": 1920,
+    "positive_system_swap_delta_workflows": 84,
+    "worker_swap_delta_peak_bytes": 0,
+    "strict_no_swap_compliance_established": false,
+    "note": "Frozen gate recorded but did not reject system swap increases. Worker counters exclude model runner; system activity cannot be attributed to the model. This is a limitation against the requested no-swap constraint."
+  }
+}

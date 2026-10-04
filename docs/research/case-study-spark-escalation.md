@@ -1,5 +1,8 @@
 # Case study: panel fusion and gated escalation on two DGX Sparks
 
+> Follow-up context (4 October 2026): see the [complete evidence overview](benchmark-evidence.md). Later controls do not establish a consistent advantage from model diversity over fresh same-model sampling. The original results below remain specific to their workload and comparator.
+
+
 This page reports a complete OpenFusion Lab experiment run on real hardware, including a
 negative result, a diagnosis, and the escalation policy that turned it into a measurable
 gain. It follows the reporting policy in [Reporting Results](reporting-results.md):
@@ -121,7 +124,7 @@ Key comparisons (exact McNemar on the test split):
 
 - Gated escalation vs best single small model: **+11 −0, p = 0.0010** — a significant
   accuracy gain.
-- Gated escalation vs flagship-always: +1 −6, p = 0.125 — **not significantly worse**, at
+- Gated escalation vs flagship-always: +1 −6, p = 0.125 — **no significant difference detected; equivalence was not established**, at
   40% of the flagship calls.
 
 Gate behaviour on the test items: 11 escalations fixed an anchor error, 17 spent a

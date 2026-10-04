@@ -9,6 +9,12 @@ OpenFusion is designed for users who want to test whether model fusion actually 
 quality under a hard model-call ceiling and per-call token limits, while measuring the
 resulting latency, token, and cost trade-offs.
 
+## Benchmark evidence
+
+The [complete evidence overview](research/benchmark-evidence.md) includes positive test-guided results and the
+later negative diversity controls. Start with a strong single model and fresh same-model
+sampling; use a mixed workflow when a held-out comparison justifies it.
+
 ## What OpenFusion does
 
 Read the [prospective MoA deployment study](research/prospective-moa-deployment.md)

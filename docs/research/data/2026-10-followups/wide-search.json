@@ -1,0 +1,460 @@
+{
+  "accuracy_95ci": [
+    -0.09583333333333334,
+    -0.008333333333333333
+  ],
+  "accuracy_difference": -0.05,
+  "bootstrap_resamples": 10000,
+  "caveats": [
+    "Results concern this coding cohort without execution feedback; they do not establish universal real-world benefit.",
+    "Different model quality and diversity both change between arms; this does not causally isolate diversity.",
+    "Seeds share tasks and are robustness checks, not independent replications.",
+    "Failure to meet the success rule is not proof of equivalence or no practical use.",
+    "Development searches 32 configurations. Only one frozen winner is confirmatory.",
+    "Qwen-only denotes the proposer pool. Both arms use the same frozen aggregator, which can be another model.",
+    "Exact whitespace-token grading uses at most eight bounded cases per task, not exhaustive correctness.",
+    "A higher score than a single small model is insufficient: confirmatory success also requires positive confidence bounds versus both single-model baselines."
+  ],
+  "completed_utc": "2026-10-02T01:11:18.136601+00:00",
+  "execution_amendment_sha256": "50d3e52a2602f46f19a36896c7e3a2fc5494d0447ef1bff10683a1416a26dcec",
+  "gates": {
+    "beats_single_qwen_with_positive_ci": true,
+    "beats_single_stronger_with_positive_ci": false,
+    "confidence_interval_positive": false,
+    "difference_at_least_5pp": false,
+    "positive_difference_both_seeds": false,
+    "two_sided_p_below_05": true
+  },
+  "heterogeneous_accuracy": 0.6,
+  "n_task_seed_pairs": 240,
+  "n_tasks": 120,
+  "per_seed_difference": {
+    "101": -0.041666666666666664,
+    "202": -0.058333333333333334
+  },
+  "qwen_only_accuracy": 0.65,
+  "random_seed": 20261001,
+  "registration_id": "e3327b706e7bea34d178d305cfa75cd0e875a6fd2789b9cb204fc34ea4564b07",
+  "resources": {
+    "generation_elapsed_seconds": 141307.74008774897,
+    "interpretation": "Calls are shared across arms and development strategies. These are physical run totals, not separate arm costs. Unknown usage is not zero usage.",
+    "known_input_tokens": 12980262,
+    "known_output_tokens": 3107042,
+    "physical_calls": 6240,
+    "requests_with_unknown_usage": 24,
+    "usage_complete": false
+  },
+  "sign_flip_random_seed": 20261002,
+  "sign_flip_resamples": 100000,
+  "single_model_comparisons": {
+    "single_qwen": {
+      "accuracy_95ci": [
+        0.0875,
+        0.20833333333333334
+      ],
+      "accuracy_difference": 0.14583333333333334,
+      "bootstrap_resamples": 10000,
+      "caveats": [
+        "Results concern this coding cohort without execution feedback; they do not establish universal real-world benefit.",
+        "Different model quality and diversity both change between arms; this does not causally isolate diversity.",
+        "Seeds share tasks and are robustness checks, not independent replications.",
+        "Failure to meet the success rule is not proof of equivalence or no practical use."
+      ],
+      "gates": {
+        "confidence_interval_positive": true,
+        "difference_at_least_5pp": true,
+        "positive_difference_both_seeds": true,
+        "two_sided_p_below_05": true
+      },
+      "heterogeneous_accuracy": 0.6,
+      "n_task_seed_pairs": 240,
+      "n_tasks": 120,
+      "per_seed_difference": {
+        "101": 0.16666666666666666,
+        "202": 0.125
+      },
+      "qwen_only_accuracy": 0.45416666666666666,
+      "random_seed": 20261001,
+      "sign_flip_random_seed": 20261002,
+      "sign_flip_resamples": 100000,
+      "single_qwen_accuracy": 0.45416666666666666,
+      "single_stronger_accuracy": 0.6166666666666667,
+      "strategy": "independent__stronger__synthesis",
+      "success": true,
+      "two_sided_task_sign_flip_p": 9.99990000099999e-06
+    },
+    "single_stronger": {
+      "accuracy_95ci": [
+        -0.07916666666666666,
+        0.05
+      ],
+      "accuracy_difference": -0.016666666666666666,
+      "bootstrap_resamples": 10000,
+      "caveats": [
+        "Results concern this coding cohort without execution feedback; they do not establish universal real-world benefit.",
+        "Different model quality and diversity both change between arms; this does not causally isolate diversity.",
+        "Seeds share tasks and are robustness checks, not independent replications.",
+        "Failure to meet the success rule is not proof of equivalence or no practical use."
+      ],
+      "gates": {
+        "confidence_interval_positive": false,
+        "difference_at_least_5pp": false,
+        "positive_difference_both_seeds": false,
+        "two_sided_p_below_05": false
+      },
+      "heterogeneous_accuracy": 0.6,
+      "n_task_seed_pairs": 240,
+      "n_tasks": 120,
+      "per_seed_difference": {
+        "101": 0.008333333333333333,
+        "202": -0.041666666666666664
+      },
+      "qwen_only_accuracy": 0.6166666666666667,
+      "random_seed": 20261001,
+      "sign_flip_random_seed": 20261002,
+      "sign_flip_resamples": 100000,
+      "single_qwen_accuracy": 0.45416666666666666,
+      "single_stronger_accuracy": 0.6166666666666667,
+      "strategy": "independent__stronger__synthesis",
+      "success": false,
+      "two_sided_task_sign_flip_p": 0.7089129108708913
+    }
+  },
+  "single_qwen_accuracy": 0.45416666666666666,
+  "single_stronger_accuracy": 0.6166666666666667,
+  "strategy": "independent__stronger__synthesis",
+  "success": false,
+  "two_sided_task_sign_flip_p": 0.042609573904260956,
+  "winner": {
+    "development_grading_sha256": "03b5713818060b68afa1c9306102dd60ba465cc3e41277d72cd4d279e5609429",
+    "frozen_utc": "2026-10-01T15:19:59.062560+00:00",
+    "n_tasks": 24,
+    "ranking": [
+      {
+        "accuracy_difference": 0.10416666666666667,
+        "heterogeneous_accuracy": 0.6666666666666666,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5625,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__stronger__synthesis"
+      },
+      {
+        "accuracy_difference": -0.020833333333333332,
+        "heterogeneous_accuracy": 0.6666666666666666,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.6875,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__stronger__critique_revision"
+      },
+      {
+        "accuracy_difference": 0.0625,
+        "heterogeneous_accuracy": 0.625,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5625,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__stronger__synthesis"
+      },
+      {
+        "accuracy_difference": -0.08333333333333333,
+        "heterogeneous_accuracy": 0.5625,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.6458333333333334,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__stronger__critique_revision"
+      },
+      {
+        "accuracy_difference": 0.020833333333333332,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4375,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__gemma__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.020833333333333332,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4791666666666667,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__qwen__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.020833333333333332,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4791666666666667,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__stronger__selection"
+      },
+      {
+        "accuracy_difference": -0.020833333333333332,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.4791666666666667,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__qwen__critique_revision"
+      },
+      {
+        "accuracy_difference": -0.041666666666666664,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__stronger__selection"
+      },
+      {
+        "accuracy_difference": -0.0625,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5208333333333334,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__stronger__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.0625,
+        "heterogeneous_accuracy": 0.4583333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5208333333333334,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__qwen__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.020833333333333332,
+        "heterogeneous_accuracy": 0.4375,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4583333333333333,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__qwen__selection"
+      },
+      {
+        "accuracy_difference": -0.041666666666666664,
+        "heterogeneous_accuracy": 0.4375,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.4791666666666667,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__qwen__critique_revision"
+      },
+      {
+        "accuracy_difference": -0.10416666666666667,
+        "heterogeneous_accuracy": 0.4375,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5416666666666666,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__stronger__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.041666666666666664,
+        "heterogeneous_accuracy": 0.4166666666666667,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4583333333333333,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__qwen__selection"
+      },
+      {
+        "accuracy_difference": -0.041666666666666664,
+        "heterogeneous_accuracy": 0.3958333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4375,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__qwen__synthesis"
+      },
+      {
+        "accuracy_difference": -0.0625,
+        "heterogeneous_accuracy": 0.3958333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4583333333333333,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__gemma__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.125,
+        "heterogeneous_accuracy": 0.3958333333333333,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.5208333333333334,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__qwen__synthesis"
+      },
+      {
+        "accuracy_difference": 0.041666666666666664,
+        "heterogeneous_accuracy": 0.2708333333333333,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.22916666666666666,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__phi__critique_revision"
+      },
+      {
+        "accuracy_difference": -0.125,
+        "heterogeneous_accuracy": 0.25,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.375,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__phi__synthesis"
+      },
+      {
+        "accuracy_difference": -0.16666666666666666,
+        "heterogeneous_accuracy": 0.22916666666666666,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.3958333333333333,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__phi__synthesis"
+      },
+      {
+        "accuracy_difference": -0.20833333333333334,
+        "heterogeneous_accuracy": 0.22916666666666666,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4375,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__gemma__synthesis"
+      },
+      {
+        "accuracy_difference": -0.20833333333333334,
+        "heterogeneous_accuracy": 0.22916666666666666,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.4375,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__gemma__critique_revision"
+      },
+      {
+        "accuracy_difference": -0.0625,
+        "heterogeneous_accuracy": 0.20833333333333334,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.2708333333333333,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__phi__conservative_revision"
+      },
+      {
+        "accuracy_difference": -0.2708333333333333,
+        "heterogeneous_accuracy": 0.20833333333333334,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.4791666666666667,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__gemma__synthesis"
+      },
+      {
+        "accuracy_difference": -0.25,
+        "heterogeneous_accuracy": 0.1875,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.4375,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__gemma__critique_revision"
+      },
+      {
+        "accuracy_difference": -0.125,
+        "heterogeneous_accuracy": 0.16666666666666666,
+        "logical_calls_per_arm": 5,
+        "qwen_only_accuracy": 0.2916666666666667,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__phi__critique_revision"
+      },
+      {
+        "accuracy_difference": -0.0625,
+        "heterogeneous_accuracy": 0.14583333333333334,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.20833333333333334,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__phi__conservative_revision"
+      },
+      {
+        "accuracy_difference": 0.0,
+        "heterogeneous_accuracy": 0.0,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.0,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__phi__selection"
+      },
+      {
+        "accuracy_difference": 0.0,
+        "heterogeneous_accuracy": 0.0,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.0,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "independent__gemma__selection"
+      },
+      {
+        "accuracy_difference": 0.0,
+        "heterogeneous_accuracy": 0.0,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.0,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__phi__selection"
+      },
+      {
+        "accuracy_difference": 0.0,
+        "heterogeneous_accuracy": 0.0,
+        "logical_calls_per_arm": 4,
+        "qwen_only_accuracy": 0.0,
+        "single_qwen_accuracy": 0.4583333333333333,
+        "single_stronger_accuracy": 0.5625,
+        "strategy": "roles__gemma__selection"
+      }
+    ],
+    "registration_id": "e3327b706e7bea34d178d305cfa75cd0e875a6fd2789b9cb204fc34ea4564b07",
+    "selection_rule": "Largest heterogeneous accuracy, then equal-task paired lift, then fewer logical calls, then fixed strategy order",
+    "strategy_order": [
+      "independent__qwen__selection",
+      "independent__qwen__synthesis",
+      "independent__qwen__critique_revision",
+      "independent__qwen__conservative_revision",
+      "independent__phi__selection",
+      "independent__phi__synthesis",
+      "independent__phi__critique_revision",
+      "independent__phi__conservative_revision",
+      "independent__gemma__selection",
+      "independent__gemma__synthesis",
+      "independent__gemma__critique_revision",
+      "independent__gemma__conservative_revision",
+      "independent__stronger__selection",
+      "independent__stronger__synthesis",
+      "independent__stronger__critique_revision",
+      "independent__stronger__conservative_revision",
+      "roles__qwen__selection",
+      "roles__qwen__synthesis",
+      "roles__qwen__critique_revision",
+      "roles__qwen__conservative_revision",
+      "roles__phi__selection",
+      "roles__phi__synthesis",
+      "roles__phi__critique_revision",
+      "roles__phi__conservative_revision",
+      "roles__gemma__selection",
+      "roles__gemma__synthesis",
+      "roles__gemma__critique_revision",
+      "roles__gemma__conservative_revision",
+      "roles__stronger__selection",
+      "roles__stronger__synthesis",
+      "roles__stronger__critique_revision",
+      "roles__stronger__conservative_revision"
+    ],
+    "winner": "independent__stronger__synthesis"
+  }
+}
